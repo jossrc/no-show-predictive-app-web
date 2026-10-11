@@ -3,6 +3,29 @@
 Prefijo existente `/api`; rutas nuevas versionadas en `/api/v1`. Rutas existentes intactas:
 `GET /api/health/postgres`, `GET /api/health/mysql`.
 
+## OpenAPI dinámico y Scalar
+
+El backend genera OpenAPI **3.1.0** desde los JSON Schemas de las rutas registradas, sin mantener
+un contrato estático duplicado. Solo en `NODE_ENV=development` están disponibles:
+
+- Scalar API Reference: `http://127.0.0.1:3000/docs`.
+- Especificación JSON: `http://127.0.0.1:3000/docs/openapi.json`.
+- Especificación YAML: `http://127.0.0.1:3000/docs/openapi.yaml`.
+
+Scalar sirve el bundle local y permite ejecutar solicitudes con el esquema `InternalApiKey`
+(`type=apiKey`, cabecera `x-api-key`), introduciendo la clave original sin Bearer ni credenciales
+de Python. No contiene valores secretos ni activa persistencia de autenticación. Health es público;
+las operaciones de negocio conservan su compuerta provisional. La UI y ambas especificaciones no
+se registran en `test` ni `production`.
+
+La superficie documentada depende de la composición real: las rutas predictivas pueden no estar
+registradas si están deshabilitadas o falta la credencial; Health ML depende de su registro.
+Health MySQL permanece registrado incluso sin conexión configurada (200 con `status=disabled`).
+Los tipos anulables y los códigos HTTP se conservan. Los ejemplos de petición son sintéticos;
+las probabilidades siguen siendo exploratorias, con `riskLevel=null` y política pendiente de
+validación. La integración queda pendiente de revisión manual posterior, sin pruebas automatizadas,
+typecheck, compilación ni verificación HTTP en esta sesión.
+
 ## Autenticación provisional
 
 Todas las rutas de negocio exigen `x-api-key` (credencial interna ≥ 32 caracteres; el servidor
@@ -10,8 +33,11 @@ guarda solo su SHA-256 en `INTERNAL_API_KEY_SHA256` y compara en tiempo constant
 `onRequest`: **401 uniforme** antes de validar parámetros (no revela existencia de reservas).
 Sin `INTERNAL_API_KEY_SHA256` las rutas no se registran (404). En `production` el arranque se
 rechaza (`AUTH_FULL_FLOW_PENDING_HU21_HU22`) salvo `PREDICTIVE_API_ENABLED=false`.
-**No es login (HU-21) ni RBAC (HU-22).** La clave nunca debe llegar al navegador: el consumidor
-es un servidor (p. ej. Next.js server-side). Sin CORS habilitado.
+**No es login (HU-21) ni RBAC (HU-22).** En la aplicación web el consumidor es un servidor
+(p. ej. Next.js server-side), que conserva la clave fuera del navegador. En desarrollo, Scalar
+permite introducirla manualmente para ejecutar solicitudes al mismo backend, sin persistirla.
+Sin CORS habilitado para las rutas de negocio; el plugin limita sus cabeceras CORS documentales
+a las especificaciones disponibles en desarrollo.
 
 ## Endpoints
 

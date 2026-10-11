@@ -14,5 +14,20 @@ const body = {
 } as const;
 
 export const CheckMlServiceSchema = {
-  response: { 200: body, 503: body },
+  tags: ['Health'],
+  summary: 'Consultar disponibilidad del servicio ML',
+  description:
+    'Comprobación pública de disponibilidad del microservicio interno. No ejecuta inferencias ni solicita la credencial de Python. Un servicio disponible continúa siendo exploratorio: servingStatus=EXPLORATORY_NOT_VALIDATED y operationalUseAllowed=false.',
+  security: [],
+  response: {
+    200: {
+      ...body,
+      description:
+        'Servicio ML disponible para uso exploratorio o deshabilitado (status=disabled).',
+    },
+    503: {
+      ...body,
+      description: 'Servicio ML no disponible (status=error).',
+    },
+  },
 } as const satisfies FastifySchema;

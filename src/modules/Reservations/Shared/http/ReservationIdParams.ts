@@ -10,6 +10,12 @@ export const ReservationIdParamsSchema = {
   additionalProperties: false,
   required: ['reservationId'],
   properties: {
-    reservationId: { type: 'string', pattern: DECIMAL_ID_PATTERN },
+    reservationId: {
+      type: 'string',
+      pattern: DECIMAL_ID_PATTERN,
+      description:
+        'Identificador decimal de la reserva (hasta 18 dígitos), conservado como cadena. Ejemplo sintético.',
+      examples: ['900000000001002'],
+    },
   },
 } as const;

@@ -17,7 +17,13 @@ export function registerCheckPostgresConnectionRoute(
 ): void {
   app.get<CheckPostgresConnectionRoute>(
     '/health/postgres',
-    { schema: CheckDatabaseConnectionSchema },
+    {
+      schema: {
+        ...CheckDatabaseConnectionSchema,
+        summary: 'Consultar disponibilidad de PostgreSQL',
+        description: 'Comprobación pública de la conexión PostgreSQL, sin credencial interna.',
+      },
+    },
     options.handler.handle,
   );
 }

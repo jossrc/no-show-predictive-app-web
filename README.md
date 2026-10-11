@@ -58,6 +58,31 @@ curl -s -H "x-api-key: $INTERNAL_API_KEY" "http://127.0.0.1:3000/api/v1/reservat
 
 Contrato completo y errores: [`docs/sprint-01/api_contract.md`](docs/sprint-01/api_contract.md).
 
+## Documentación interactiva — Scalar API Reference
+
+Con `NODE_ENV=development`, iniciar como siempre con `npm run dev` y abrir:
+
+- Scalar: [http://127.0.0.1:3000/docs](http://127.0.0.1:3000/docs).
+- OpenAPI JSON: [http://127.0.0.1:3000/docs/openapi.json](http://127.0.0.1:3000/docs/openapi.json).
+- OpenAPI YAML: [http://127.0.0.1:3000/docs/openapi.yaml](http://127.0.0.1:3000/docs/openapi.yaml).
+
+El contrato OpenAPI 3.1 se genera dinámicamente desde los JSON Schemas de las rutas efectivamente
+registradas. La documentación es pública en desarrollo y sus rutas no se registran en `test` ni
+`production`. El plugin sirve su bundle de Scalar desde el propio backend.
+
+Para ejecutar peticiones de negocio desde el cliente HTTP integrado, seleccionar `InternalApiKey`
+en la autenticación de Scalar e introducir la clave original en texto plano: se envía como
+`x-api-key`, sin prefijo Bearer. El hash `INTERNAL_API_KEY_SHA256` y la credencial interna de Python
+no son claves para introducir en Scalar. No se preconfiguran ni persisten credenciales en el
+navegador. Elegir una operación, completar sus parámetros o cuerpo y usar **Send**. Las rutas de
+salud no requieren autenticación. Las rutas de negocio aparecen únicamente si están habilitadas
+y se configuró su credencial provisional.
+
+Los ejemplos de petición son sintéticos. Las estimaciones continúan siendo exploratorias,
+sin validación para uso operativo ni política aprobada de niveles de riesgo (`riskLevel=null`).
+La integración queda pendiente de revisión manual; no se ejecutaron pruebas ni verificaciones
+de arranque o HTTP durante su implementación.
+
 ## Pruebas
 
 ```bash

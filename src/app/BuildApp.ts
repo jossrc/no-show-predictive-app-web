@@ -1,6 +1,9 @@
 import fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import { Environment } from '../config/environment/Environment.js';
 import type { SequelizeHealthCheck } from '../infrastructure/database/sequelize/SequelizeHealthCheck.js';
 import { logger } from '../infrastructure/logging/Logger.js';
+import { registerOpenApi } from './http/documentation/RegisterOpenApi.js';
+import { registerScalar } from './http/documentation/RegisterScalar.js';
 import { registerErrorHandler } from './http/errors/RegisterErrorHandler.js';
 import type { ExceptionReporter } from './http/errors/reporting/ExceptionReporter.js';
 import { REQUEST_ID_HEADER, resolveRequestId } from './http/request/ResolveRequestId.js';
@@ -40,12 +43,19 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   });
 
   registerErrorHandler(app, { reporters: options.exceptionReporters });
+  // El generador precede a las rutas; la documentación queda fuera de la compuerta /api/v1.
+  if (Environment.NODE_ENV === 'development') {
+    registerOpenApi(app);
+  }
   registerModules(app, {
     postgresHealthCheck: options.postgresHealthCheck,
     mysqlHealthCheck: options.mysqlHealthCheck,
     mlHealth: options.mlHealth,
     predictiveApi: options.predictiveApi,
   });
+  if (Environment.NODE_ENV === 'development') {
+    registerScalar(app);
+  }
 
   return app;
 }

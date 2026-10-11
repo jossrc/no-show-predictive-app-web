@@ -10,7 +10,13 @@ export const NotScorableReasonSchema = {
   properties: { code: { type: 'string' }, message: { type: 'string' } },
 } as const;
 
-const nullableLevel = { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] } as const;
+const nullableLevel = {
+  type: ['string', 'null'],
+  enum: ['LOW', 'MEDIUM', 'HIGH', null],
+  examples: [null],
+  description:
+    'En Sprint 01 permanece null: no existe una política científicamente aprobada de niveles de riesgo.',
+} as const;
 
 export const ModelResultSchema = {
   type: 'object',
@@ -36,8 +42,18 @@ export const ModelResultSchema = {
     algorithm: { type: 'string', enum: ['random_forest', 'xgboost'] },
     modelVersion: { type: 'string' },
     modelHash: { type: 'string' },
-    probabilityNoShow: { type: 'number', minimum: 0, maximum: 1 },
-    percentageNoShow: { type: 'number', minimum: 0, maximum: 100 },
+    probabilityNoShow: {
+      type: 'number',
+      minimum: 0,
+      maximum: 1,
+      description: 'Score exploratorio del modelo independiente, persistido sin redondear.',
+    },
+    percentageNoShow: {
+      type: 'number',
+      minimum: 0,
+      maximum: 100,
+      description: 'probabilityNoShow * 100; representación porcentual sin validación operativa.',
+    },
     target: { type: 'string', enum: ['NO_SHOW_CANDIDATE'] },
     validationStatus: { type: 'string' },
     calibrationStatus: { type: 'string' },
@@ -70,11 +86,18 @@ export const RiskAssessmentBodySchema = {
   ],
   properties: {
     reservationId: { type: 'string' },
-    status: { type: 'string', enum: ['AVAILABLE_EXPLORATORY', 'NOT_SCORED', 'NOT_SCORABLE'] },
+    status: {
+      type: 'string',
+      enum: ['AVAILABLE_EXPLORATORY', 'NOT_SCORED', 'NOT_SCORABLE'],
+      description:
+        'NOT_SCORED indica ausencia de scores; NOT_SCORABLE indica falta de evidencia temporal suficiente; AVAILABLE_EXPLORATORY indica estimaciones guardadas.',
+    },
     reasons: { type: 'array', items: NotScorableReasonSchema },
     sourceStatus: { type: 'string', enum: ['READ_ONLY_EXISTING_SCHEDULE', 'SYNTHETIC_DEMO_ONLY'] },
     sourceFreshness: { type: 'string', enum: ['CURRENT', 'STALE_CLASSIFICATION'] },
     snapshot: {
+      description:
+        'Snapshot temporalmente válido al crear la reserva; null cuando no está disponible.',
       type: ['object', 'null'],
       additionalProperties: false,
       required: [
@@ -101,6 +124,8 @@ export const RiskAssessmentBodySchema = {
     },
     models: { type: 'array', items: ModelResultSchema },
     comparison: {
+      description:
+        'Comparación descriptiva de RF y XGBoost independientes; ensembleProbability y selectedWinner permanecen null.',
       type: ['object', 'null'],
       additionalProperties: false,
       required: [

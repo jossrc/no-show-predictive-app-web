@@ -12,8 +12,16 @@ const connectionBody = {
 } as const;
 
 export const CheckDatabaseConnectionSchema = {
+  tags: ['Health'],
+  security: [],
   response: {
-    200: connectionBody,
-    503: connectionBody,
+    200: {
+      ...connectionBody,
+      description: 'Conexión disponible o conexión opcional deshabilitada.',
+    },
+    503: {
+      ...connectionBody,
+      description: 'La conexión a la base de datos no está disponible.',
+    },
   },
 } as const satisfies FastifySchema;

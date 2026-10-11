@@ -29,8 +29,14 @@ const model = {
 } as const;
 
 export const ListPredictionModelsSchema = {
+  tags: ['Prediction Models'],
+  summary: 'Consultar catálogo de modelos',
+  description:
+    'Expone la identidad pública de Random Forest y XGBoost como modelos independientes. No existe ensemble ni ganador automático. validationStatus=EXPLORATORY_NOT_VALIDATED, calibrationStatus=not_operationally_validated y operationalUseAllowed=false. La política de riesgo está pendiente de validación científica.',
+  security: [{ InternalApiKey: [] }],
   response: {
     200: {
+      description: 'Identidad pública y estado experimental de los modelos independientes.',
       type: 'object',
       additionalProperties: false,
       required: ['data', 'requestId'],
@@ -49,10 +55,26 @@ export const ListPredictionModelsSchema = {
         requestId: { type: 'string' },
       },
     },
-    401: ErrorResponseSchema,
-    429: ErrorResponseSchema,
-    502: ErrorResponseSchema,
-    503: ErrorResponseSchema,
-    504: ErrorResponseSchema,
+    401: {
+      ...ErrorResponseSchema,
+      description:
+        'Credencial x-api-key ausente o inválida; se comprueba antes de validar la solicitud.',
+    },
+    429: {
+      ...ErrorResponseSchema,
+      description: 'ML_RATE_LIMITED: límite de concurrencia o cola de solicitudes ML alcanzado.',
+    },
+    502: {
+      ...ErrorResponseSchema,
+      description: 'ML_CONTRACT_VIOLATION: respuesta inválida del servicio ML.',
+    },
+    503: {
+      ...ErrorResponseSchema,
+      description: 'ML_UNAVAILABLE o ML_CREDENTIAL_REJECTED: catálogo ML no disponible.',
+    },
+    504: {
+      ...ErrorResponseSchema,
+      description: 'ML_TIMEOUT: tiempo de espera del servicio ML agotado.',
+    },
   },
 } as const satisfies FastifySchema;

@@ -46,10 +46,26 @@ export const ScoreSummarySchema = {
     modelKey: { type: 'string' },
     modelVersion: { type: 'string' },
     modelHash: { type: 'string' },
-    probabilityNoShow: { type: 'number', minimum: 0, maximum: 1 },
-    percentageNoShow: { type: 'number', minimum: 0, maximum: 100 },
+    probabilityNoShow: {
+      type: 'number',
+      minimum: 0,
+      maximum: 1,
+      description: 'Probabilidad exploratoria original del modelo, persistida sin redondear.',
+    },
+    percentageNoShow: {
+      type: 'number',
+      minimum: 0,
+      maximum: 100,
+      description: 'probabilityNoShow * 100; estimación exploratoria sin validación operativa.',
+    },
     scoredAt: { type: 'string', format: 'date-time' },
     predictionRunId: { type: 'string' },
-    riskLevel: { type: ['string', 'null'], enum: ['LOW', 'MEDIUM', 'HIGH', null] },
+    riskLevel: {
+      type: ['string', 'null'],
+      enum: ['LOW', 'MEDIUM', 'HIGH', null],
+      examples: [null],
+      description:
+        'Permanece null mientras la política científica de niveles esté pendiente de validación.',
+    },
   },
 } as const;

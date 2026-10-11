@@ -33,14 +33,35 @@ const responseBody = {
 } as const;
 
 export const RequestReservationPredictionSchema = {
+  tags: ['Predictions'],
+  summary: 'Solicitar una predicción exploratoria',
+  description:
+    'Acción explícita sobre un snapshot temporalmente válido de la reserva. compare consulta Random Forest y XGBoost de forma independiente; single requiere modelKey. No genera ensemble, no selecciona un ganador ni reentrena modelos. 201 crea y persiste un run; 200 reutiliza una predicción existente y run.replayed indica la reutilización. Conserva la probabilidad original sin redondear; percentageNoShow = probabilityNoShow * 100. Evaluación EXPLORATORY_NOT_VALIDATED, calibración not_operationally_validated y operationalUseAllowed=false; riskLevel=null, riskPolicyStatus=pending_validation y objetivo proxy NO_SHOW_CANDIDATE. Sin evidencia suficiente devuelve 409 NOT_SCORABLE. Cuerpo máximo: 1024 bytes. Los ejemplos de petición son sintéticos.',
+  security: [{ InternalApiKey: [] }],
   params: ReservationIdParamsSchema,
   body: {
+    description:
+      'Ejemplos sintéticos: compare sin modelKey; single con la clave de Random Forest o XGBoost.',
+    examples: [
+      { mode: 'compare' },
+      { mode: 'single', modelKey: 'random_forest_full_v1' },
+      { mode: 'single', modelKey: 'xgboost_full_v1' },
+    ],
     type: 'object',
     additionalProperties: false,
     required: ['mode'],
     properties: {
-      mode: { type: 'string', enum: ['compare', 'single'] },
-      modelKey: { type: 'string', enum: [...ML_MODEL_KEYS] },
+      mode: {
+        type: 'string',
+        enum: ['compare', 'single'],
+        description:
+          'compare solicita ambos modelos independientes; single solicita un único modelo.',
+      },
+      modelKey: {
+        type: 'string',
+        enum: [...ML_MODEL_KEYS],
+        description: 'Obligatorio en single y prohibido en compare.',
+      },
     },
     // single exige modelKey; compare lo prohíbe (sin fallback silencioso de modelo).
     if: { properties: { mode: { const: 'single' } } },
@@ -48,17 +69,56 @@ export const RequestReservationPredictionSchema = {
     else: { not: { required: ['modelKey'] } },
   },
   response: {
-    200: responseBody,
-    201: responseBody,
-    400: ErrorResponseSchema,
-    401: ErrorResponseSchema,
-    404: ErrorResponseSchema,
-    409: ErrorResponseSchema,
-    413: ErrorResponseSchema,
-    422: ErrorResponseSchema,
-    429: ErrorResponseSchema,
-    502: ErrorResponseSchema,
-    503: ErrorResponseSchema,
-    504: ErrorResponseSchema,
+    200: {
+      ...responseBody,
+      description: 'Predicción existente reutilizada; run.replayed indica la reutilización.',
+    },
+    201: {
+      ...responseBody,
+      description: 'Nuevo run de predicción creado y persistido.',
+    },
+    400: {
+      ...ErrorResponseSchema,
+      description: 'Solicitud inválida: REQUEST_VALIDATION_ERROR en parámetros, query o cuerpo.',
+    },
+    401: {
+      ...ErrorResponseSchema,
+      description:
+        'Credencial x-api-key ausente o inválida; se comprueba antes de validar la solicitud.',
+    },
+    404: {
+      ...ErrorResponseSchema,
+      description: 'RESERVATION_NOT_FOUND: reserva inexistente o inaccesible para el consumidor.',
+    },
+    409: {
+      ...ErrorResponseSchema,
+      description:
+        'NOT_SCORABLE: evidencia temporal insuficiente; FEATURE_VERSION_MISMATCH: versión de features incompatible.',
+    },
+    413: {
+      ...ErrorResponseSchema,
+      description: 'PAYLOAD_TOO_LARGE: el cuerpo supera el límite permitido.',
+    },
+    422: {
+      ...ErrorResponseSchema,
+      description: 'INVALID_FEATURES: features incompatibles con el contrato del modelo.',
+    },
+    429: {
+      ...ErrorResponseSchema,
+      description: 'ML_RATE_LIMITED: límite de concurrencia o cola de solicitudes ML alcanzado.',
+    },
+    502: {
+      ...ErrorResponseSchema,
+      description: 'ML_CONTRACT_VIOLATION: respuesta inválida del servicio ML.',
+    },
+    503: {
+      ...ErrorResponseSchema,
+      description:
+        'ML_UNAVAILABLE, ML_CREDENTIAL_REJECTED o PERSISTENCE_UNAVAILABLE: dependencia ML o persistencia no disponible.',
+    },
+    504: {
+      ...ErrorResponseSchema,
+      description: 'ML_TIMEOUT: tiempo de espera del servicio ML agotado.',
+    },
   },
 } as const satisfies FastifySchema;
