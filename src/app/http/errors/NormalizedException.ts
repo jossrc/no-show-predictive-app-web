@@ -16,6 +16,9 @@ export type NormalizedExceptionKind =
   | 'REQUEST_VALIDATION'
   | 'UNAUTHORIZED'
   | 'INFRASTRUCTURE'
+  | 'UPSTREAM_TIMEOUT'
+  | 'UPSTREAM_RATE_LIMITED'
+  | 'UPSTREAM_CONTRACT'
   | 'HTTP_CLIENT'
   | 'UNKNOWN';
 

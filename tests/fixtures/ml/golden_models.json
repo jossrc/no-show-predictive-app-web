@@ -1,0 +1,79 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml f2f30b5f a la entrada artificial examples/*.json (reports/api-smoke-prompt8-20261010-183350.json). No son datos de clientes ni m\u00e9tricas.",
+  "status": 200,
+  "body": {
+    "api_version": "v1",
+    "feature_version": "BOOKING_BASELINE_V1",
+    "default_model_key": "random_forest_full_v1",
+    "models": [
+      {
+        "model_key": "random_forest_full_v1",
+        "algorithm": "random_forest",
+        "model_version": "random_forest_full_v1:4e3c86a17005",
+        "model_hash": "4e3c86a17005",
+        "experiment": "full",
+        "training_mode": "exploratory",
+        "validation_status": "EXPLORATORY_NOT_VALIDATED",
+        "calibration_status": "not_operationally_validated",
+        "operational_use_allowed": false,
+        "feature_count": 19,
+        "predictor_columns": [
+          "age_at_booking",
+          "client_sex",
+          "booking_lead_days",
+          "appointment_month",
+          "appointment_weekday",
+          "appointment_hour",
+          "duration_minutes",
+          "is_fwa",
+          "clinic_id",
+          "scheduled_service_lines",
+          "distinct_body_areas",
+          "single_body_area_id",
+          "has_medical_evaluation",
+          "has_type4_service",
+          "previous_attended",
+          "previous_no_show",
+          "previous_no_show_rate",
+          "days_since_previous_attended",
+          "days_since_previous_no_show"
+        ],
+        "role": "provisional_demo_default"
+      },
+      {
+        "model_key": "xgboost_full_v1",
+        "algorithm": "xgboost",
+        "model_version": "xgboost_full_v1:376d3db9d4d3",
+        "model_hash": "376d3db9d4d3",
+        "experiment": "full",
+        "training_mode": "exploratory",
+        "validation_status": "EXPLORATORY_NOT_VALIDATED",
+        "calibration_status": "not_operationally_validated",
+        "operational_use_allowed": false,
+        "feature_count": 19,
+        "predictor_columns": [
+          "age_at_booking",
+          "client_sex",
+          "booking_lead_days",
+          "appointment_month",
+          "appointment_weekday",
+          "appointment_hour",
+          "duration_minutes",
+          "is_fwa",
+          "clinic_id",
+          "scheduled_service_lines",
+          "distinct_body_areas",
+          "single_body_area_id",
+          "has_medical_evaluation",
+          "has_type4_service",
+          "previous_attended",
+          "previous_no_show",
+          "previous_no_show_rate",
+          "days_since_previous_attended",
+          "days_since_previous_no_show"
+        ],
+        "role": "independent_comparator"
+      }
+    ]
+  }
+}

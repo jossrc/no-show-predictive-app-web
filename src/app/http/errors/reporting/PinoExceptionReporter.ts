@@ -14,7 +14,7 @@ export class PinoExceptionReporter implements ExceptionReporter {
       exception: report.exception,
     };
 
-    if (report.exception.kind === 'INFRASTRUCTURE' || report.exception.kind === 'UNKNOWN') {
+    if (report.exception.category === 'INFRASTRUCTURE' || report.exception.kind === 'UNKNOWN') {
       context.logger.error(logData, report.exception.message);
       return;
     }

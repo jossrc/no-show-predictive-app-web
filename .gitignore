@@ -4,7 +4,10 @@
 *.orig
 
 # Created by git when using merge tools for conflicts
-docs/
+# docs/ es material privado; solo se versiona la documentación del Sprint 01 y ADRs.
+docs/*
+!docs/sprint-01/
+!docs/adr/
 *.BACKUP.*
 *.BASE.*
 *.LOCAL.*
@@ -789,3 +792,5 @@ FodyWeavers.xsd
 
 docker/postgres/data/
 util-docs/
+# Reportes locales de rendimiento/pruebas (pueden regenerarse)
+reports/

@@ -1,0 +1,56 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml f2f30b5f a la entrada artificial examples/*.json (reports/api-smoke-prompt8-20261010-183350.json). No son datos de clientes ni m\u00e9tricas.",
+  "status": 200,
+  "body": {
+    "api_version": "v1",
+    "feature_version": "BOOKING_BASELINE_V1",
+    "results": [
+      {
+        "api_version": "v1",
+        "model_key": "random_forest_full_v1",
+        "algorithm": "random_forest",
+        "model_version": "random_forest_full_v1:4e3c86a17005",
+        "model_hash": "4e3c86a17005",
+        "feature_version": "BOOKING_BASELINE_V1",
+        "probability_no_show": 0.6976400433344135,
+        "prediction_target": "NO_SHOW_CANDIDATE",
+        "target_class": 1,
+        "risk_level": null,
+        "risk_policy_status": "pending_validation",
+        "validation_status": "EXPLORATORY_NOT_VALIDATED",
+        "calibration_status": "not_operationally_validated",
+        "operational_use_allowed": false,
+        "request_id": "412779d1dfcb4610a7f9f69b67e9d9d8"
+      },
+      {
+        "api_version": "v1",
+        "model_key": "xgboost_full_v1",
+        "algorithm": "xgboost",
+        "model_version": "xgboost_full_v1:376d3db9d4d3",
+        "model_hash": "376d3db9d4d3",
+        "feature_version": "BOOKING_BASELINE_V1",
+        "probability_no_show": 0.9159286618232727,
+        "prediction_target": "NO_SHOW_CANDIDATE",
+        "target_class": 1,
+        "risk_level": null,
+        "risk_policy_status": "pending_validation",
+        "validation_status": "EXPLORATORY_NOT_VALIDATED",
+        "calibration_status": "not_operationally_validated",
+        "operational_use_allowed": false,
+        "request_id": "412779d1dfcb4610a7f9f69b67e9d9d8"
+      }
+    ],
+    "comparison": {
+      "absolute_probability_difference": 0.21828861848885917,
+      "interpretation": "descriptive_only_not_model_confidence",
+      "ensemble_probability": null,
+      "selected_winner": null
+    },
+    "risk_level": null,
+    "risk_policy_status": "pending_validation",
+    "validation_status": "EXPLORATORY_NOT_VALIDATED",
+    "calibration_status": "not_operationally_validated",
+    "operational_use_allowed": false,
+    "request_id": "412779d1dfcb4610a7f9f69b67e9d9d8"
+  }
+}

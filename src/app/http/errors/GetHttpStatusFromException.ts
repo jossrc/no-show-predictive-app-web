@@ -16,6 +16,12 @@ export function getHttpStatusFromException(exception: NormalizedException): numb
       return 401;
     case 'INFRASTRUCTURE':
       return 503;
+    case 'UPSTREAM_TIMEOUT':
+      return 504;
+    case 'UPSTREAM_RATE_LIMITED':
+      return 429;
+    case 'UPSTREAM_CONTRACT':
+      return 502;
     case 'HTTP_CLIENT':
       return exception.httpStatus ?? 400;
     case 'UNKNOWN':

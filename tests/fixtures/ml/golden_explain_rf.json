@@ -1,0 +1,68 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml f2f30b5f a la entrada artificial examples/*.json (reports/api-smoke-prompt8-20261010-183350.json). No son datos de clientes ni m\u00e9tricas.",
+  "status": 200,
+  "body": {
+    "api_version": "v1",
+    "model_key": "random_forest_full_v1",
+    "algorithm": "random_forest",
+    "model_version": "random_forest_full_v1:4e3c86a17005",
+    "model_hash": "4e3c86a17005",
+    "feature_version": "BOOKING_BASELINE_V1",
+    "probability_no_show": 0.6976400433344135,
+    "prediction_target": "NO_SHOW_CANDIDATE",
+    "target_class": 1,
+    "risk_level": null,
+    "risk_policy_status": "pending_validation",
+    "validation_status": "EXPLORATORY_NOT_VALIDATED",
+    "calibration_status": "not_operationally_validated",
+    "operational_use_allowed": false,
+    "request_id": "1097a45a8ded41d68619108748e4adac",
+    "explanation": {
+      "method": "tree_shap",
+      "feature_perturbation": "tree_path_dependent",
+      "base_value": 0.5000000000000007,
+      "model_output_in_explanation_space": 0.6976400433344135,
+      "reconstructed_output_in_explanation_space": 0.6976400434447961,
+      "additivity_error": 1.1038259195572664e-10,
+      "explained_class": 1,
+      "total_feature_count": 19,
+      "top_k": 5,
+      "factors": [
+        {
+          "feature_name": "duration_minutes",
+          "direction": "increases_model_output",
+          "contribution": 0.1267639088756133,
+          "absolute_contribution": 0.1267639088756133
+        },
+        {
+          "feature_name": "previous_no_show_rate",
+          "direction": "increases_model_output",
+          "contribution": 0.02314825706049566,
+          "absolute_contribution": 0.02314825706049566
+        },
+        {
+          "feature_name": "age_at_booking",
+          "direction": "increases_model_output",
+          "contribution": 0.018508665515641943,
+          "absolute_contribution": 0.018508665515641943
+        },
+        {
+          "feature_name": "clinic_id",
+          "direction": "increases_model_output",
+          "contribution": 0.016447369806033948,
+          "absolute_contribution": 0.016447369806033948
+        },
+        {
+          "feature_name": "days_since_previous_no_show",
+          "direction": "increases_model_output",
+          "contribution": 0.015047805904836556,
+          "absolute_contribution": 0.015047805904836556
+        }
+      ],
+      "other_features_contribution": -0.0022759637178259885,
+      "explanation_scope": "local_association_not_causality",
+      "output_space": "probability",
+      "output_link": "identity"
+    }
+  }
+}

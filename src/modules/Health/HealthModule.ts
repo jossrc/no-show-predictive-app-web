@@ -1,5 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { SequelizeHealthCheck } from '../../infrastructure/database/sequelize/SequelizeHealthCheck.js';
+import type { MlPredictionClient } from '../../infrastructure/http/ml/MlPredictionClient.js';
+import { CheckMlService } from './CheckMlService/application/CheckMlService.js';
+import { CheckMlServiceHandler } from './CheckMlService/presentation/http/handler/CheckMlServiceHandler.js';
+import { registerCheckMlServiceRoute } from './CheckMlService/presentation/http/route/CheckMlServiceRoute.js';
 import { CheckMysqlConnection } from './CheckMysqlConnection/application/CheckMysqlConnection.js';
 import { CheckMysqlConnectionHandler } from './CheckMysqlConnection/presentation/http/handler/CheckMysqlConnectionHandler.js';
 import { registerCheckMysqlConnectionRoute } from './CheckMysqlConnection/presentation/http/route/CheckMysqlConnectionRoute.js';
@@ -10,6 +14,8 @@ import { registerCheckPostgresConnectionRoute } from './CheckPostgresConnection/
 export interface HealthModuleOptions {
   postgresHealthCheck: SequelizeHealthCheck;
   mysqlHealthCheck: SequelizeHealthCheck | null;
+  /** Opcional: si se omite, /v1/health/ml no se registra. */
+  mlHealth?: { client: Pick<MlPredictionClient, 'ready'>; configured: boolean } | undefined;
 }
 
 export function createHealthModule(options: HealthModuleOptions): FastifyPluginAsync {
@@ -28,5 +34,13 @@ export function createHealthModule(options: HealthModuleOptions): FastifyPluginA
     registerCheckMysqlConnectionRoute(app, {
       handler: checkMysqlConnectionHandler,
     });
+
+    if (options.mlHealth) {
+      const checkMlService = new CheckMlService(
+        options.mlHealth.client,
+        options.mlHealth.configured,
+      );
+      registerCheckMlServiceRoute(app, { handler: new CheckMlServiceHandler(checkMlService) });
+    }
   };
 }

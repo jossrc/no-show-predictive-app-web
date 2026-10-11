@@ -1,0 +1,13 @@
+{
+  // Typecheck de pruebas: los tests viven en tests/ (fuera de src) y nunca se emiten a dist.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

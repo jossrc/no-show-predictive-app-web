@@ -1,0 +1,10 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml f2f30b5f a la entrada artificial examples/*.json (reports/api-smoke-prompt8-20261010-183350.json). No son datos de clientes ni m\u00e9tricas.",
+  "status": 200,
+  "body": {
+    "status": "ready",
+    "models_loaded": ["random_forest_full_v1", "xgboost_full_v1"],
+    "serving_status": "EXPLORATORY_NOT_VALIDATED",
+    "operational_use_allowed": false
+  }
+}

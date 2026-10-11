@@ -5,6 +5,18 @@ export function getPublicErrorMessage(exception: NormalizedException): string {
     return 'Servicio temporalmente no disponible';
   }
 
+  if (exception.kind === 'UPSTREAM_TIMEOUT') {
+    return 'Un servicio dependiente excedió el tiempo permitido';
+  }
+
+  if (exception.kind === 'UPSTREAM_RATE_LIMITED') {
+    return 'Servicio dependiente saturado; reintente más tarde';
+  }
+
+  if (exception.kind === 'UPSTREAM_CONTRACT') {
+    return 'Un servicio dependiente respondió fuera de contrato';
+  }
+
   if (exception.kind === 'UNKNOWN') {
     return 'Error interno del servidor';
   }
