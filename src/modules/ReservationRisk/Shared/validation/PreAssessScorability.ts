@@ -19,7 +19,8 @@ export interface ScorabilityPreAssessment {
 
 /**
  * Clasificación barata para el listado (sin consultas extra por fila): usa solo hechos ya
- * leídos. El detalle /risk aplica la evaluación completa de evidencia.
+ * leídos. Una reprogramación no se declara NOT_SCORABLE por sí sola: las copias FLOWww pueden
+ * reconstruir la reserva original en /risk. Sin score persistido no se marca AVAILABLE.
  */
 export function preAssessScorability(
   reservation: Reservation,
@@ -40,8 +41,8 @@ export function preAssessScorability(
     codes.push('NO_USABLE_SNAPSHOT_IN_MODE');
   } else {
     if (reservation.bookingCreatedAt === null) codes.push('MISSING_BOOKING_TIME');
-    if (reservation.hasRescheduleEvent) codes.push('RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT');
     if (
+      !reservation.hasRescheduleEvent &&
       reservation.bookingCreatedAt !== null &&
       reservation.bookingCreatedAt.getTime() >= reservation.appointmentAt.getTime()
     )

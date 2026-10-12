@@ -9,7 +9,10 @@ import { notScorableReason, type NotScorableReason } from '../models/NotScorable
 import type { VerifiedBookingSnapshot } from '../models/VerifiedBookingSnapshot.js';
 import type { BookingEvidenceSource } from '../persistence/BookingEvidenceSource.js';
 import type { BookingSnapshotRepository } from '../persistence/BookingSnapshotRepository.js';
-import { assessBookingEvidence } from '../validation/AssessBookingEvidence.js';
+import {
+  assessBookingEvidence,
+  scoringSchedule,
+} from '../validation/AssessBookingEvidence.js';
 import { verifySnapshotIntegrity } from './VerifySnapshotIntegrity.js';
 
 export type BookingSnapshotResolution =
@@ -26,8 +29,10 @@ export type BookingSnapshotResolution =
  * 1) snapshot inmutable ya persistido con la evidencia admitida por el modo activo;
  * 2) evidencia de la fuente del MISMO modo (réplica real si demuestra el estado al reservar, o
  *    fixture sintética versionada en SYNTHETIC_DEMO_ONLY); una fuente de otro modo se rechaza;
- *    FLOWww acredita los servicios sin cambios por ausencia de copias y eventos contradictorios;
- * 3) en otro caso NOT_SCORABLE con motivos. No usa servicios actuales de versiones modificadas.
+ *    FLOWww acredita los servicios sin cambios por ausencia de copias, o reconstruye la primera
+ *    versión (FLOWWW_RECONSTRUCTED_BOOKING) para el contrato booking_creation;
+ * 3) en otro caso NOT_SCORABLE con motivos. No usa el horario ni los servicios vigentes de una
+ *    cita reprogramada: las 19 variables se calculan sobre la versión original reconstruida.
  */
 export class BookingSnapshotResolver {
   constructor(
@@ -75,12 +80,24 @@ export class BookingSnapshotResolver {
     }
 
     const assessment = assessBookingEvidence(evidence);
-    return assessment.kind === 'VERIFIED'
-      ? {
-          kind: 'VERIFIED_SOURCE',
-          verified: assessment.snapshot,
-          sourceIngestionBatchId: evidence.sourceIngestionBatchId,
-        }
-      : assessment;
+    if (assessment.kind !== 'VERIFIED') return assessment;
+
+    const schedule = scoringSchedule(evidence);
+    return {
+      kind: 'VERIFIED_SOURCE',
+      verified: {
+        ...assessment.snapshot,
+        appointmentAt: schedule.appointmentAt,
+        appointmentEndAt: schedule.appointmentEndAt,
+        scheduledServices: schedule.services.map((line) => ({
+          sourceDetailId: line.sourceDetailId,
+          productId: line.productId,
+          productType: line.productType,
+          bodyAreaProductId: line.bodyAreaProductId,
+          isMedicalEvaluation: line.isMedicalEvaluation,
+        })),
+      },
+      sourceIngestionBatchId: evidence.sourceIngestionBatchId,
+    };
   }
 }

@@ -20,6 +20,7 @@ function toEvidence(fixture: SyntheticReservationFixture): BookingEvidence {
     fwaFlag: fixture.fwaFlag,
     hasRescheduleEvent: fixture.hasRescheduleEvent,
     historicalVersions: [],
+    reconstructedOriginal: null,
     client: { ...fixture.client, lastModifiedAt: SYNTHETIC_CLIENT_STAMP },
     services: [
       {

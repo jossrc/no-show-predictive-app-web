@@ -13,7 +13,31 @@ export interface EvidenceServiceLine extends ScheduledServiceLine {
 }
 
 export type ServicesTemporalEvidence =
-  'NONE_CURRENT_REPLICA' | 'CAPTURED_AT_BOOKING' | 'FLOWWW_UNCHANGED_BOOKING';
+  | 'NONE_CURRENT_REPLICA'
+  | 'CAPTURED_AT_BOOKING'
+  | 'FLOWWW_UNCHANGED_BOOKING'
+  | 'FLOWWW_RECONSTRUCTED_BOOKING';
+
+export interface HistoricalServiceLine {
+  readonly sourceDetailId: DecimalId;
+  readonly productId: DecimalId | null;
+  readonly packId: DecimalId;
+  readonly voucherId: DecimalId;
+  readonly plannedSessionNumber: number;
+  readonly productType: number | null;
+  readonly bodyAreaProductId: DecimalId | null;
+  readonly isMedicalEvaluation: boolean | null;
+  readonly productFound: boolean;
+  readonly catalogResolved: boolean;
+}
+
+/** Primera versión reconstruida desde copias FLOWww (fecha, horario y servicios originales). */
+export interface ReconstructedOriginalBooking {
+  readonly sourceVersionId: DecimalId;
+  readonly appointmentAt: Date;
+  readonly appointmentEndAt: Date | null;
+  readonly services: readonly EvidenceServiceLine[];
+}
 
 /** Versiones anteriores, vinculadas por DiaryGDelayedID; no son reservas independientes. */
 export interface HistoricalBookingVersion {
@@ -21,15 +45,13 @@ export interface HistoricalBookingVersion {
   readonly originalReservationId: DecimalId;
   readonly appointmentAt: Date | null;
   readonly appointmentEndAt: Date | null;
+  /** DiaryGCreated de la copia (hora de pared Lima). */
+  readonly versionCreatedAt: Date | null;
+  /** DiaryGStamp de la copia: cronología de congelado, no el DiaryGID vigente. */
+  readonly versionStampAt: Date | null;
   readonly scheduleChanged: boolean;
   readonly servicesChanged: boolean;
-  readonly services: readonly {
-    readonly sourceDetailId: DecimalId;
-    readonly productId: DecimalId | null;
-    readonly packId: DecimalId;
-    readonly voucherId: DecimalId;
-    readonly plannedSessionNumber: number;
-  }[];
+  readonly services: readonly HistoricalServiceLine[];
 }
 
 export interface BookingEvidence {
@@ -43,6 +65,8 @@ export interface BookingEvidence {
   readonly fwaFlag: number | null;
   readonly hasRescheduleEvent: boolean;
   readonly historicalVersions: readonly HistoricalBookingVersion[];
+  /** Completa solo si las copias acreditan fecha, horario y servicios de la primera versión. */
+  readonly reconstructedOriginal: ReconstructedOriginalBooking | null;
   readonly client: {
     readonly birthDate: string | null;
     readonly sex: string | null;
@@ -52,6 +76,7 @@ export interface BookingEvidence {
   /**
    * FLOWWW_UNCHANGED_BOOKING: sin copias históricas ni eventos contradictorios, los servicios
    * siguen siendo los originales por la regla de FLOWww. No equivale a una captura fechada.
+   * FLOWWW_RECONSTRUCTED_BOOKING: la primera versión se reconstruyó desde copias FLOWww.
    * NONE_CURRENT_REPLICA: no se ha acreditado el estado al reservar.
    */
   readonly servicesTemporalEvidence: ServicesTemporalEvidence;

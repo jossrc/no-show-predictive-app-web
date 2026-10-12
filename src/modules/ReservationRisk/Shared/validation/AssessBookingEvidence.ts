@@ -1,4 +1,8 @@
-import type { BookingEvidence } from '../models/BookingEvidence.js';
+import type {
+  BookingEvidence,
+  EvidenceServiceLine,
+  ReconstructedOriginalBooking,
+} from '../models/BookingEvidence.js';
 import {
   notScorableReason,
   type NotScorableReason,
@@ -15,6 +19,35 @@ function modifiedBeforeBooking(lastModifiedAt: Date | null, predictionAt: Date):
   return lastModifiedAt !== null && lastModifiedAt.getTime() < predictionAt.getTime();
 }
 
+export function reconstructedOriginalBooking(
+  evidence: BookingEvidence,
+): ReconstructedOriginalBooking | null {
+  return evidence.servicesTemporalEvidence === 'FLOWWW_RECONSTRUCTED_BOOKING'
+    ? evidence.reconstructedOriginal
+    : null;
+}
+
+/** Horario y servicios de la foto de reserva: originales reconstruidos, nunca el slot vigente. */
+export function scoringSchedule(evidence: BookingEvidence): {
+  readonly appointmentAt: Date;
+  readonly appointmentEndAt: Date | null;
+  readonly services: readonly EvidenceServiceLine[];
+} {
+  const original = reconstructedOriginalBooking(evidence);
+  if (original !== null) {
+    return {
+      appointmentAt: original.appointmentAt,
+      appointmentEndAt: original.appointmentEndAt,
+      services: original.services,
+    };
+  }
+  return {
+    appointmentAt: evidence.appointmentAt,
+    appointmentEndAt: evidence.appointmentEndAt,
+    services: evidence.services,
+  };
+}
+
 /**
  * Decide si la réplica actual demuestra la foto de la reserva en `prediction_at`.
  * Acumula TODOS los motivos (no solo el primero) para documentar el bloqueo. Nunca rellena
@@ -23,20 +56,28 @@ function modifiedBeforeBooking(lastModifiedAt: Date | null, predictionAt: Date):
 export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenceAssessment {
   const codes = new Set<NotScorableReasonCode>();
   const predictionAt = evidence.bookingCreatedAt;
+  const original = reconstructedOriginalBooking(evidence);
+  const schedule = scoringSchedule(evidence);
 
   if (evidence.reservationStatus !== 'SCHEDULED') codes.add('RESERVATION_NOT_SCHEDULED');
   if (predictionAt === null) codes.add('MISSING_BOOKING_TIME');
-  if (predictionAt !== null && predictionAt.getTime() >= evidence.appointmentAt.getTime()) {
+  if (predictionAt !== null && predictionAt.getTime() >= schedule.appointmentAt.getTime()) {
     codes.add('BOOKING_NOT_BEFORE_APPOINTMENT');
   }
-  if (evidence.hasRescheduleEvent || evidence.historicalVersions.some((v) => v.scheduleChanged)) {
+  const rescheduled =
+    evidence.hasRescheduleEvent || evidence.historicalVersions.some((v) => v.scheduleChanged);
+  if (rescheduled && original === null) {
     codes.add('RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT');
   }
   const unchangedBooking =
     evidence.servicesTemporalEvidence === 'FLOWWW_UNCHANGED_BOOKING' &&
     evidence.historicalVersions.length === 0 &&
     !evidence.hasRescheduleEvent;
-  if (evidence.servicesTemporalEvidence !== 'CAPTURED_AT_BOOKING' && !unchangedBooking) {
+  if (
+    evidence.servicesTemporalEvidence !== 'CAPTURED_AT_BOOKING' &&
+    !unchangedBooking &&
+    original === null
+  ) {
     codes.add('SCHEDULED_SERVICES_NOT_POINT_IN_TIME');
   }
 
@@ -49,7 +90,7 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
     codes.add('CLIENT_ATTRIBUTES_NOT_POINT_IN_TIME');
   }
 
-  const catalogUnresolved = evidence.services.some(
+  const catalogUnresolved = schedule.services.some(
     (line) => !line.productFound || !line.catalogResolved,
   );
   if (catalogUnresolved) {
@@ -67,12 +108,12 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
       clientId: evidence.clientId,
       clinicId: evidence.clinicId,
       predictionAt,
-      appointmentAt: evidence.appointmentAt,
-      appointmentEndAt: evidence.appointmentEndAt,
+      appointmentAt: schedule.appointmentAt,
+      appointmentEndAt: schedule.appointmentEndAt,
       fwaFlag: evidence.fwaFlag,
       clientBirthDate: evidence.client.birthDate,
       clientSex: evidence.client.sex,
-      scheduledServices: evidence.services.map((line) => ({
+      scheduledServices: schedule.services.map((line) => ({
         sourceDetailId: line.sourceDetailId,
         productId: line.productId,
         productType: line.productType,

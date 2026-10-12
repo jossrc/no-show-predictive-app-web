@@ -50,11 +50,7 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
     assert.equal(result.availability, 'NOT_SCORABLE');
     assert.deepEqual(
       result.reasons.map((r) => r.code),
-      [
-        'RESERVATION_NOT_SCHEDULED',
-        'MISSING_BOOKING_TIME',
-        'RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT',
-      ],
+      ['RESERVATION_NOT_SCHEDULED', 'MISSING_BOOKING_TIME'],
     );
   });
 

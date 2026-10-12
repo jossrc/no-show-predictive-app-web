@@ -7,6 +7,9 @@ import type {
   BookingEvidence,
   EvidenceServiceLine,
   HistoricalBookingVersion,
+  HistoricalServiceLine,
+  ReconstructedOriginalBooking,
+  ServicesTemporalEvidence,
 } from '../../models/BookingEvidence.js';
 import type { BookingEvidenceSource } from '../BookingEvidenceSource.js';
 
@@ -43,15 +46,19 @@ WHERE o.appointment_id = $1::bigint
   AND NOT (d."DiaryGTags" ~ '(^|[^0-9])16([^0-9]|$)')`;
 
 /**
- * FLOWww conserva cada versión previa bajo su propio DiaryGID. No se ordenan por una marca
- * supuesta de modificación: todavía no se reconstruye la primera versión para puntuar.
- * EXCEPT ALL compara composición y multiplicidad, sin confundir IDs de líneas copiados.
+ * FLOWww conserva cada versión previa bajo su propio DiaryGID. La cronología de copias usa
+ * DiaryGStamp/DiaryGCreated de cada copia (no el DiaryGID vigente). EXCEPT ALL compara
+ * composición y multiplicidad, sin confundir IDs de líneas copiados.
  */
 const HISTORY_SQL = `
 SELECT h."DiaryGID"::text AS reservation_id,
        h."DiaryGDelayedID"::text AS original_reservation_id,
-       (h."DiaryGDate" + h."DiaryGStart") AT TIME ZONE 'America/Lima' AS appointment_at,
-       (h."DiaryGDate" + h."DiaryGEnd") AT TIME ZONE 'America/Lima' AS appointment_end_at,
+       CASE WHEN h."DiaryGDate" IS NOT NULL AND h."DiaryGStart" IS NOT NULL
+            THEN (h."DiaryGDate" + h."DiaryGStart") AT TIME ZONE 'America/Lima' END AS appointment_at,
+       CASE WHEN h."DiaryGDate" IS NOT NULL AND h."DiaryGEnd" IS NOT NULL
+            THEN (h."DiaryGDate" + h."DiaryGEnd") AT TIME ZONE 'America/Lima' END AS appointment_end_at,
+       h."DiaryGCreated" AT TIME ZONE 'America/Lima' AS version_created_at,
+       h."DiaryGStamp" AT TIME ZONE 'America/Lima' AS version_stamp_at,
        (h."DiaryGDate" IS DISTINCT FROM d."DiaryGDate"
         OR h."DiaryGStart" IS DISTINCT FROM d."DiaryGStart"
         OR h."DiaryGEnd" IS DISTINCT FROM d."DiaryGEnd") AS schedule_changed,
@@ -72,12 +79,19 @@ SELECT h."DiaryGID"::text AS reservation_id,
        NULLIF(dd."DiaryZoneID", 0)::text AS product_id,
        dd."DiaryPackID"::text AS pack_id,
        dd."DiaryVoucherID"::text AS voucher_id,
-       dd."DiarySessionID" AS planned_session_number
+       dd."DiarySessionID" AS planned_session_number,
+       p."ProductID" IS NOT NULL AS product_found,
+       r.product_id IS NOT NULL AS catalog_resolved,
+       p."ProductType" AS product_type,
+       r.body_area_product_id::text AS body_area_product_id,
+       CASE WHEN p."ProductID" IS NULL THEN NULL ELSE p."ProductEvaluation" <> 0 END AS is_medical_evaluation
 FROM raw_flow.diary_gen h
 JOIN raw_flow.diary_gen d ON d."DiaryGID" = h."DiaryGDelayedID"
 LEFT JOIN raw_flow.diary_det dd ON dd."DiaryGID" = h."DiaryGID"
+LEFT JOIN raw_flow.x_config_products_det p ON p."ProductID" = NULLIF(dd."DiaryZoneID", 0)
+LEFT JOIN analytics.product_catalog_resolution r ON r.product_id = NULLIF(dd."DiaryZoneID", 0)
 WHERE h."DiaryGDelayedID" = $1::bigint AND h."DiaryGDelayed" = -1
-ORDER BY h."DiaryGID", dd."DiaryID"`;
+ORDER BY h."DiaryGStamp" NULLS LAST, h."DiaryGCreated" NULLS LAST, h."DiaryGID", dd."DiaryID"`;
 
 /** Misma fuente que el ETL 14 (appointment_services SCHEDULED + product_catalog_resolution). */
 const SERVICES_SQL = `
@@ -118,13 +132,35 @@ interface HistoryRow {
   original_reservation_id: string;
   appointment_at: Date | null;
   appointment_end_at: Date | null;
+  version_created_at: Date | null;
+  version_stamp_at: Date | null;
   schedule_changed: boolean;
   services_changed: boolean;
   source_detail_id: string | null;
   product_id: string | null;
-  pack_id: string;
-  voucher_id: string;
-  planned_session_number: number;
+  pack_id: string | null;
+  voucher_id: string | null;
+  planned_session_number: number | null;
+  product_found: boolean | null;
+  catalog_resolved: boolean | null;
+  product_type: number | null;
+  body_area_product_id: string | null;
+  is_medical_evaluation: boolean | null;
+}
+
+function mapHistoricalService(row: HistoryRow): HistoricalServiceLine {
+  return {
+    sourceDetailId: row.source_detail_id!,
+    productId: row.product_id,
+    packId: row.pack_id ?? '0',
+    voucherId: row.voucher_id ?? '0',
+    plannedSessionNumber: Number(row.planned_session_number ?? 0),
+    productType: row.product_type === null ? null : Number(row.product_type),
+    bodyAreaProductId: row.body_area_product_id,
+    isMedicalEvaluation: row.is_medical_evaluation,
+    productFound: row.product_found === true,
+    catalogResolved: row.catalog_resolved === true,
+  };
 }
 
 function mapHistoricalVersions(rows: readonly HistoryRow[]): HistoricalBookingVersion[] {
@@ -135,8 +171,10 @@ function mapHistoricalVersions(rows: readonly HistoryRow[]): HistoricalBookingVe
       originalReservationId: row.original_reservation_id,
       appointmentAt: row.appointment_at,
       appointmentEndAt: row.appointment_end_at,
-      scheduleChanged: row.schedule_changed,
-      servicesChanged: row.services_changed,
+      versionCreatedAt: row.version_created_at,
+      versionStampAt: row.version_stamp_at,
+      scheduleChanged: row.schedule_changed === true,
+      servicesChanged: row.services_changed === true,
       services: [],
     };
     versions.set(row.reservation_id, {
@@ -144,19 +182,65 @@ function mapHistoricalVersions(rows: readonly HistoryRow[]): HistoricalBookingVe
       services:
         row.source_detail_id === null
           ? version.services
-          : [
-              ...version.services,
-              {
-                sourceDetailId: row.source_detail_id,
-                productId: row.product_id,
-                packId: row.pack_id,
-                voucherId: row.voucher_id,
-                plannedSessionNumber: Number(row.planned_session_number),
-              },
-            ],
+          : [...version.services, mapHistoricalService(row)],
     });
   }
   return [...versions.values()];
+}
+
+function versionTime(version: HistoricalBookingVersion): Date | null {
+  return version.versionStampAt ?? version.versionCreatedAt;
+}
+
+/** Primera copia en el tiempo real de congelado; DiaryGID solo desempatan instantes iguales. */
+function pickOriginalVersion(
+  versions: readonly HistoricalBookingVersion[],
+): HistoricalBookingVersion | null {
+  if (versions.length === 0) return null;
+  if (versions.length === 1) return versions[0]!;
+  if (versions.some((version) => versionTime(version) === null)) return null;
+  return [...versions].sort((left, right) => {
+    const delta = versionTime(left)!.getTime() - versionTime(right)!.getTime();
+    if (delta !== 0) return delta;
+    return left.reservationId < right.reservationId ? -1 : 1;
+  })[0]!;
+}
+
+function toEvidenceServiceLine(line: HistoricalServiceLine): EvidenceServiceLine {
+  return {
+    sourceDetailId: line.sourceDetailId,
+    productId: line.productId,
+    productType: line.productType,
+    bodyAreaProductId: line.bodyAreaProductId,
+    isMedicalEvaluation: line.isMedicalEvaluation,
+    productFound: line.productFound,
+    catalogResolved: line.catalogResolved,
+  };
+}
+
+function reconstructOriginalBooking(
+  versions: readonly HistoricalBookingVersion[],
+): ReconstructedOriginalBooking | null {
+  const original = pickOriginalVersion(versions);
+  if (original === null || original.appointmentAt === null) return null;
+  return {
+    sourceVersionId: original.reservationId,
+    appointmentAt: original.appointmentAt,
+    appointmentEndAt: original.appointmentEndAt,
+    services: original.services.map(toEvidenceServiceLine),
+  };
+}
+
+function temporalEvidence(input: {
+  historicalVersions: readonly HistoricalBookingVersion[];
+  hasRescheduleEvent: boolean;
+  reconstructedOriginal: ReconstructedOriginalBooking | null;
+}): ServicesTemporalEvidence {
+  if (input.historicalVersions.length === 0 && !input.hasRescheduleEvent) {
+    return 'FLOWWW_UNCHANGED_BOOKING';
+  }
+  if (input.reconstructedOriginal !== null) return 'FLOWWW_RECONSTRUCTED_BOOKING';
+  return 'NONE_CURRENT_REPLICA';
 }
 
 interface ServiceRow {
@@ -225,6 +309,7 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
     const hasRescheduleEvent =
       facts.has_reschedule_event === true ||
       historicalVersions.some((version) => version.scheduleChanged);
+    const reconstructedOriginal = reconstructOriginalBooking(historicalVersions);
 
     const services = await this.sequelize.query<ServiceRow>(SERVICES_SQL, {
       bind: [reservationId],
@@ -243,6 +328,7 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
       fwaFlag: facts.fwa_flag === null ? null : Number(facts.fwa_flag),
       hasRescheduleEvent,
       historicalVersions,
+      reconstructedOriginal,
       client: facts.client_found
         ? {
             birthDate: facts.client_birth_date,
@@ -251,10 +337,11 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
           }
         : null,
       services: services.map(mapService),
-      servicesTemporalEvidence:
-        historicalVersions.length === 0 && !hasRescheduleEvent
-          ? 'FLOWWW_UNCHANGED_BOOKING'
-          : 'NONE_CURRENT_REPLICA',
+      servicesTemporalEvidence: temporalEvidence({
+        historicalVersions,
+        hasRescheduleEvent,
+        reconstructedOriginal,
+      }),
       sourceIngestionBatchId: facts.ingestion_batch_id,
       evidenceSource: this.snapshotEvidenceSource,
     };
