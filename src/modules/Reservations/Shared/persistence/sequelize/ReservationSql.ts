@@ -22,18 +22,21 @@ const RESERVATION_COLUMNS = `
   o.classification_cutoff_at AS classification_cutoff_at`;
 
 /**
- * Reprogramación: evento RESCHEDULED del ETL 03 o, de forma equivalente, la copia desplazada
- * en raw_flow.diary_gen (DiaryGDelayed=-1 apuntando a esta cita), que es su fuente. Ambas ramas
- * usan índices (idx_appointment_events_app parcial e idx_raw_diary_delayed_id).
+ * Reprogramación: evento RESCHEDULED (también si falta su fecha) o copia FLOWww con un
+ * horario distinto. Una copia de servicios sin cambios de horario no basta para afirmar
+ * reprogramación; /risk comprueba sus versiones y detalles antes de acreditar los servicios.
  */
 const RESCHEDULE_EXISTS = `
   (EXISTS (
      SELECT 1 FROM analytics.appointment_events e
      WHERE e.appointment_id = o.appointment_id AND e.event_type = 'RESCHEDULED'
-       AND e.event_at IS NOT NULL
    ) OR EXISTS (
      SELECT 1 FROM raw_flow.diary_gen h
+     JOIN raw_flow.diary_gen d ON d."DiaryGID" = h."DiaryGDelayedID"
      WHERE h."DiaryGDelayedID" = o.appointment_id AND h."DiaryGDelayed" = -1
+       AND (h."DiaryGDate" IS DISTINCT FROM d."DiaryGDate"
+         OR h."DiaryGStart" IS DISTINCT FROM d."DiaryGStart"
+         OR h."DiaryGEnd" IS DISTINCT FROM d."DiaryGEnd")
    )) AS has_reschedule_event`;
 
 class BindList {

@@ -1,5 +1,6 @@
 import type { SnapshotEvidenceSource } from '../../../../shared/data/DataSourceMode.js';
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
+import type { ServicesTemporalEvidence } from './BookingEvidence.js';
 
 export interface ScheduledServiceLine {
   readonly sourceDetailId: DecimalId;
@@ -30,4 +31,6 @@ export interface VerifiedBookingSnapshot {
   readonly clientSex: string | null;
   readonly scheduledServices: readonly ScheduledServiceLine[];
   readonly evidenceSource: SnapshotEvidenceSource;
+  /** Procedencia temporal derivada o capturada; se conserva en evidence_json al persistir. */
+  readonly servicesTemporalEvidence?: ServicesTemporalEvidence;
 }

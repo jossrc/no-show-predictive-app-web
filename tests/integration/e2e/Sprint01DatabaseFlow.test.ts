@@ -52,6 +52,7 @@ function buildDatabaseApp(
       ...process.env,
       DATA_SOURCE_MODE: mode,
       INTERNAL_API_KEY_SHA256: sha256Hex(TEST_INTERNAL_API_KEY),
+      ML_RESEARCH_RISK_ENABLED: String(mode === 'READ_ONLY_EXISTING_SCHEDULE'),
     }),
   );
   return buildApp({
@@ -96,12 +97,14 @@ describe(
       await client?.end();
     });
 
-    it('READ_ONLY_EXISTING_SCHEDULE: la réplica no demuestra snapshots ⇒ listado NOT_SCORABLE, POST 409, cero escrituras', async () => {
+    it('READ_ONLY_EXISTING_SCHEDULE: sin copias ⇒ 19 predictoras, compare research, SQLite, GET y replay', async () => {
       const ml = new FakePredictionClient();
+      const file = path.join(mkdtempSync(path.join(os.tmpdir(), 'nsp-flowww-')), 'store.sqlite');
       const store = SqlitePredictiveStore.open({
-        path: ':memory:',
+        path: file,
         mode: 'READ_ONLY_EXISTING_SCHEDULE',
       });
+      const local = new DatabaseSync(file, { readOnly: true });
       const app = buildDatabaseApp(sequelize, ml, 'READ_ONLY_EXISTING_SCHEDULE', store);
       const list = await app.inject({
         method: 'GET',
@@ -113,14 +116,22 @@ describe(
         list.json().data.map((d: { reservationId: string }) => d.reservationId),
         [IDS.r1, IDS.r2, IDS.rescheduled, IDS.noCreated, IDS.unsafe],
       );
-      assert.ok(
+      assert.deepEqual(
         list
           .json()
-          .data.every(
-            (d: { risk: { predictionAvailability: string } }) =>
-              d.risk.predictionAvailability === 'NOT_SCORABLE',
+          .data.map(
+            (d: { risk: { predictionAvailability: string } }) => d.risk.predictionAvailability,
           ),
+        ['NOT_SCORED', 'NOT_SCORED', 'NOT_SCORABLE', 'NOT_SCORABLE', 'NOT_SCORED'],
       );
+
+      const beforeRisk = await app.inject({
+        method: 'GET',
+        url: `/api/v1/reservations/${IDS.r1}/risk`,
+        headers: AUTH_HEADERS,
+      });
+      assert.equal(beforeRisk.statusCode, 200);
+      assert.equal(beforeRisk.json().data.status, 'NOT_SCORED');
 
       const post = await app.inject({
         method: 'POST',
@@ -128,10 +139,77 @@ describe(
         headers: AUTH_HEADERS,
         payload: { mode: 'compare' },
       });
-      assert.deepEqual([post.statusCode, post.json().error.code], [409, 'NOT_SCORABLE']);
-      assert.equal(ml.calls.length, 0);
+      assert.equal(post.statusCode, 201, post.body);
+      assert.equal(post.json().data.status, 'AVAILABLE_EXPLORATORY');
+      assert.equal(ml.callsOf('research_compare').length, 1);
+      const snapshot = local
+        .prepare(
+          'SELECT features_json, evidence_json, snapshot_hash FROM booking_feature_snapshots',
+        )
+        .get()!;
+      assert.equal(Object.keys(JSON.parse(String(snapshot.features_json))).length, 19);
+      assert.equal(
+        JSON.parse(String(snapshot.evidence_json)).servicesTemporalEvidence,
+        'FLOWWW_UNCHANGED_BOOKING',
+      );
+      assert.match(String(snapshot.snapshot_hash), /^[a-f0-9]{64}$/);
+      assert.equal(local.prepare('SELECT count(*) AS n FROM prediction_model_results').get()?.n, 2);
+      const risk = await app.inject({
+        method: 'GET',
+        url: `/api/v1/reservations/${IDS.r1}/risk`,
+        headers: AUTH_HEADERS,
+      });
+      assert.equal(risk.statusCode, 200);
+      assert.equal(risk.json().data.status, 'AVAILABLE_EXPLORATORY');
+      assert.deepEqual(
+        risk.json().data.models.map((m: { modelKey: string }) => m.modelKey),
+        ['random_forest_full_v1', 'xgboost_full_v1'],
+      );
+      assert.ok(
+        risk
+          .json()
+          .data.models.every(
+            (m: { operationalUseAllowed: boolean; experimentalRisk: unknown }) =>
+              m.operationalUseAllowed === false && m.experimentalRisk !== null,
+          ),
+      );
+      const replay = await app.inject({
+        method: 'POST',
+        url: `/api/v1/reservations/${IDS.r1}/predictions`,
+        headers: AUTH_HEADERS,
+        payload: { mode: 'compare' },
+      });
+      assert.equal(replay.statusCode, 200);
+      assert.equal(replay.json().data.run.replayed, true);
+      assert.equal(ml.callsOf('research_compare').length, 1);
+      assert.equal(local.prepare('SELECT count(*) AS n FROM prediction_runs').get()?.n, 1);
+      assert.equal(
+        local.prepare('SELECT count(*) AS n FROM booking_feature_snapshots').get()?.n,
+        1,
+      );
+      assert.deepEqual(
+        local
+          .prepare(
+            'SELECT features_json, evidence_json, snapshot_hash FROM booking_feature_snapshots',
+          )
+          .get(),
+        snapshot,
+      );
+      for (const id of [IDS.r2, IDS.rescheduled, IDS.noCreated, IDS.cancelled]) {
+        const rejected = await app.inject({
+          method: 'POST',
+          url: `/api/v1/reservations/${id}/predictions`,
+          headers: AUTH_HEADERS,
+          payload: { mode: 'compare' },
+        });
+        assert.equal(rejected.statusCode, 409, rejected.body);
+        assert.equal(rejected.json().error.code, 'NOT_SCORABLE');
+      }
+      assert.equal(ml.callsOf('research_compare').length, 1);
       assert.equal(await countRows(client, 'ml.booking_feature_snapshots'), 0);
       await app.close();
+      local.close();
+      store.close();
     });
 
     it('SYNTHETIC_DEMO_ONLY: listado → POST compare → riesgo → factores → historial, con persistencia auditable', async () => {

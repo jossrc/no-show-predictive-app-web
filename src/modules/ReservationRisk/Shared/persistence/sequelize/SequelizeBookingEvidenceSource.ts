@@ -3,7 +3,11 @@ import type { Sequelize } from 'sequelize-typescript';
 import { SourceDataUnavailableException } from '../../../../../infrastructure/database/errors/SourceDataUnavailableException.js';
 import { runInReadOnlySnapshot } from '../../../../../infrastructure/database/sequelize/postgres/RunInReadOnlySnapshot.js';
 import { deriveReservationStatus } from '../../../../Reservations/Shared/models/ReservationStatus.js';
-import type { BookingEvidence, EvidenceServiceLine } from '../../models/BookingEvidence.js';
+import type {
+  BookingEvidence,
+  EvidenceServiceLine,
+  HistoricalBookingVersion,
+} from '../../models/BookingEvidence.js';
 import type { BookingEvidenceSource } from '../BookingEvidenceSource.js';
 
 /**
@@ -21,6 +25,7 @@ SELECT o.appointment_id::text AS reservation_id,
        CASE WHEN d."DiaryGDate" IS NOT NULL AND d."DiaryGEnd" IS NOT NULL
             THEN (d."DiaryGDate" + d."DiaryGEnd") AT TIME ZONE 'America/Lima' END AS appointment_end_at,
        d."DiaryGFWA" AS fwa_flag,
+       d."DiaryGNotAttended" = -1 AS cancelled,
        d._ingestion_batch_id::text AS ingestion_batch_id,
        c."ClientID" IS NOT NULL AS client_found,
        c."ClientBirthDate"::text AS client_birth_date,
@@ -29,15 +34,50 @@ SELECT o.appointment_id::text AS reservation_id,
        (EXISTS (
           SELECT 1 FROM analytics.appointment_events e
           WHERE e.appointment_id = o.appointment_id AND e.event_type = 'RESCHEDULED'
-            AND e.event_at IS NOT NULL
-        ) OR EXISTS (
-          SELECT 1 FROM raw_flow.diary_gen h
-          WHERE h."DiaryGDelayedID" = o.appointment_id AND h."DiaryGDelayed" = -1
         )) AS has_reschedule_event
 FROM analytics.appointment_outcomes o
 JOIN raw_flow.diary_gen d ON d."DiaryGID" = o.appointment_id
 LEFT JOIN raw_flow.clients c ON c."ClientID" = o.client_id
-WHERE o.appointment_id = $1::bigint`;
+WHERE o.appointment_id = $1::bigint
+  AND d."DiaryGLocked" <> -1 AND d."DiaryGDelayed" <> -1
+  AND NOT (d."DiaryGTags" ~ '(^|[^0-9])16([^0-9]|$)')`;
+
+/**
+ * FLOWww conserva cada versión previa bajo su propio DiaryGID. No se ordenan por una marca
+ * supuesta de modificación: todavía no se reconstruye la primera versión para puntuar.
+ * EXCEPT ALL compara composición y multiplicidad, sin confundir IDs de líneas copiados.
+ */
+const HISTORY_SQL = `
+SELECT h."DiaryGID"::text AS reservation_id,
+       h."DiaryGDelayedID"::text AS original_reservation_id,
+       (h."DiaryGDate" + h."DiaryGStart") AT TIME ZONE 'America/Lima' AS appointment_at,
+       (h."DiaryGDate" + h."DiaryGEnd") AT TIME ZONE 'America/Lima' AS appointment_end_at,
+       (h."DiaryGDate" IS DISTINCT FROM d."DiaryGDate"
+        OR h."DiaryGStart" IS DISTINCT FROM d."DiaryGStart"
+        OR h."DiaryGEnd" IS DISTINCT FROM d."DiaryGEnd") AS schedule_changed,
+       EXISTS (
+         (SELECT x."DiaryZoneID", x."DiaryPackID", x."DiaryVoucherID", x."DiarySessionID"
+          FROM raw_flow.diary_det x WHERE x."DiaryGID" = h."DiaryGID"
+          EXCEPT ALL
+          SELECT x."DiaryZoneID", x."DiaryPackID", x."DiaryVoucherID", x."DiarySessionID"
+          FROM raw_flow.diary_det x WHERE x."DiaryGID" = d."DiaryGID")
+         UNION ALL
+         (SELECT x."DiaryZoneID", x."DiaryPackID", x."DiaryVoucherID", x."DiarySessionID"
+          FROM raw_flow.diary_det x WHERE x."DiaryGID" = d."DiaryGID"
+          EXCEPT ALL
+          SELECT x."DiaryZoneID", x."DiaryPackID", x."DiaryVoucherID", x."DiarySessionID"
+          FROM raw_flow.diary_det x WHERE x."DiaryGID" = h."DiaryGID")
+       ) AS services_changed,
+       dd."DiaryID"::text AS source_detail_id,
+       NULLIF(dd."DiaryZoneID", 0)::text AS product_id,
+       dd."DiaryPackID"::text AS pack_id,
+       dd."DiaryVoucherID"::text AS voucher_id,
+       dd."DiarySessionID" AS planned_session_number
+FROM raw_flow.diary_gen h
+JOIN raw_flow.diary_gen d ON d."DiaryGID" = h."DiaryGDelayedID"
+LEFT JOIN raw_flow.diary_det dd ON dd."DiaryGID" = h."DiaryGID"
+WHERE h."DiaryGDelayedID" = $1::bigint AND h."DiaryGDelayed" = -1
+ORDER BY h."DiaryGID", dd."DiaryID"`;
 
 /** Misma fuente que el ETL 14 (appointment_services SCHEDULED + product_catalog_resolution). */
 const SERVICES_SQL = `
@@ -70,6 +110,53 @@ interface FactsRow {
   client_sex: string | null;
   client_last_modified_at: Date | null;
   has_reschedule_event: boolean;
+  cancelled: boolean;
+}
+
+interface HistoryRow {
+  reservation_id: string;
+  original_reservation_id: string;
+  appointment_at: Date | null;
+  appointment_end_at: Date | null;
+  schedule_changed: boolean;
+  services_changed: boolean;
+  source_detail_id: string | null;
+  product_id: string | null;
+  pack_id: string;
+  voucher_id: string;
+  planned_session_number: number;
+}
+
+function mapHistoricalVersions(rows: readonly HistoryRow[]): HistoricalBookingVersion[] {
+  const versions = new Map<string, HistoricalBookingVersion>();
+  for (const row of rows) {
+    const version = versions.get(row.reservation_id) ?? {
+      reservationId: row.reservation_id,
+      originalReservationId: row.original_reservation_id,
+      appointmentAt: row.appointment_at,
+      appointmentEndAt: row.appointment_end_at,
+      scheduleChanged: row.schedule_changed,
+      servicesChanged: row.services_changed,
+      services: [],
+    };
+    versions.set(row.reservation_id, {
+      ...version,
+      services:
+        row.source_detail_id === null
+          ? version.services
+          : [
+              ...version.services,
+              {
+                sourceDetailId: row.source_detail_id,
+                productId: row.product_id,
+                packId: row.pack_id,
+                voucherId: row.voucher_id,
+                plannedSessionNumber: Number(row.planned_session_number),
+              },
+            ],
+    });
+  }
+  return [...versions.values()];
 }
 
 interface ServiceRow {
@@ -95,8 +182,6 @@ function mapService(row: ServiceRow): EvidenceServiceLine {
 }
 
 export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
-  // diary_det / appointment_services no registran cuándo se creó cada línea.
-  readonly servicesTemporalEvidence = 'NONE_CURRENT_REPLICA' as const;
   readonly snapshotEvidenceSource = 'VERIFIED_BOOKING_SNAPSHOT' as const;
 
   constructor(
@@ -130,6 +215,17 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
     const status = deriveReservationStatus(facts.outcome, facts.classification_detail);
     if (status === null) return null;
 
+    const historicalVersions = mapHistoricalVersions(
+      await this.sequelize.query<HistoryRow>(HISTORY_SQL, {
+        bind: [reservationId],
+        type: QueryTypes.SELECT,
+        transaction,
+      }),
+    );
+    const hasRescheduleEvent =
+      facts.has_reschedule_event === true ||
+      historicalVersions.some((version) => version.scheduleChanged);
+
     const services = await this.sequelize.query<ServiceRow>(SERVICES_SQL, {
       bind: [reservationId],
       type: QueryTypes.SELECT,
@@ -140,12 +236,13 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
       reservationId: facts.reservation_id,
       clientId: facts.client_id,
       clinicId: Number(facts.clinic_id),
-      reservationStatus: status,
+      reservationStatus: status === 'SCHEDULED' && facts.cancelled ? 'CANCELLED' : status,
       bookingCreatedAt: facts.created_at_source,
       appointmentAt: facts.appointment_at,
       appointmentEndAt: facts.appointment_end_at,
       fwaFlag: facts.fwa_flag === null ? null : Number(facts.fwa_flag),
-      hasRescheduleEvent: facts.has_reschedule_event === true,
+      hasRescheduleEvent,
+      historicalVersions,
       client: facts.client_found
         ? {
             birthDate: facts.client_birth_date,
@@ -154,7 +251,10 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
           }
         : null,
       services: services.map(mapService),
-      servicesTemporalEvidence: this.servicesTemporalEvidence,
+      servicesTemporalEvidence:
+        historicalVersions.length === 0 && !hasRescheduleEvent
+          ? 'FLOWWW_UNCHANGED_BOOKING'
+          : 'NONE_CURRENT_REPLICA',
       sourceIngestionBatchId: facts.ingestion_batch_id,
       evidenceSource: this.snapshotEvidenceSource,
     };

@@ -19,6 +19,7 @@ function toEvidence(fixture: SyntheticReservationFixture): BookingEvidence {
     appointmentEndAt: new Date(fixture.appointmentEndAt),
     fwaFlag: fixture.fwaFlag,
     hasRescheduleEvent: fixture.hasRescheduleEvent,
+    historicalVersions: [],
     client: { ...fixture.client, lastModifiedAt: SYNTHETIC_CLIENT_STAMP },
     services: [
       {
@@ -43,7 +44,6 @@ function toEvidence(fixture: SyntheticReservationFixture): BookingEvidence {
  * nunca acepta (BookingSnapshotResolver exige la evidencia del modo activo).
  */
 export class SyntheticBookingEvidenceSource implements BookingEvidenceSource {
-  readonly servicesTemporalEvidence = 'CAPTURED_AT_BOOKING' as const;
   readonly snapshotEvidenceSource = 'SYNTHETIC_DEMO_ONLY' as const;
 
   constructor(

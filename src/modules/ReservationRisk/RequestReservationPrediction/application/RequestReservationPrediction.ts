@@ -246,6 +246,7 @@ export class RequestReservationPrediction {
         sources: [
           'analytics.appointment_outcomes',
           'raw_flow.diary_gen',
+          'raw_flow.diary_det',
           'raw_flow.clients',
           'analytics.appointment_services',
           'analytics.product_catalog_resolution',
@@ -254,6 +255,7 @@ export class RequestReservationPrediction {
         historyCutoffExclusive: history.cutoffAt.toISOString(),
         historyLatestKnownAt: history.latestKnownAt?.toISOString() ?? null,
         serviceLines: verified.scheduledServices.length,
+        servicesTemporalEvidence: verified.servicesTemporalEvidence ?? 'CAPTURED_AT_BOOKING',
         warnings: built.value.warnings,
       },
       sourceIngestionBatchId: resolution.sourceIngestionBatchId,

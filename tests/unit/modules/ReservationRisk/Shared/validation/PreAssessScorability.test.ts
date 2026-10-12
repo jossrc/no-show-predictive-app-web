@@ -5,11 +5,23 @@ import { makeReservation } from '../../../../../helpers/MakeSyntheticReservation
 
 const readOnly = {
   mode: 'READ_ONLY_EXISTING_SCHEDULE' as const,
-  servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' as const,
   snapshotEvidenceSource: 'VERIFIED_BOOKING_SNAPSHOT' as const,
 };
 
 describe('PreAssessScorability (estado por fila del listado, sin consultas extra)', () => {
+  it('creación en/después de la cita ⇒ BOOKING_NOT_BEFORE_APPOINTMENT', () => {
+    const reservation = makeReservation();
+    const result = preAssessScorability(
+      { ...reservation, bookingCreatedAt: reservation.appointmentAt },
+      { hasScores: false, hasUsableSnapshot: false },
+      readOnly,
+    );
+    assert.equal(result.availability, 'NOT_SCORABLE');
+    assert.deepEqual(
+      result.reasons.map((r) => r.code),
+      ['BOOKING_NOT_BEFORE_APPOINTMENT'],
+    );
+  });
   it('scores persistidos ⇒ AVAILABLE_EXPLORATORY; snapshot sin score ⇒ NOT_SCORED', () => {
     assert.equal(
       preAssessScorability(
@@ -29,7 +41,7 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
     );
   });
 
-  it('réplica sin evidencia temporal ⇒ NOT_SCORABLE con motivos tipados (nunca score 0)', () => {
+  it('hechos incompatibles ⇒ NOT_SCORABLE con motivos tipados', () => {
     const result = preAssessScorability(
       makeReservation({ bookingCreatedAt: null, hasRescheduleEvent: true, status: 'CANCELLED' }),
       { hasScores: false, hasUsableSnapshot: false },
@@ -42,12 +54,11 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
         'RESERVATION_NOT_SCHEDULED',
         'MISSING_BOOKING_TIME',
         'RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT',
-        'SCHEDULED_SERVICES_NOT_POINT_IN_TIME',
       ],
     );
   });
 
-  it('fuente de otro modo ⇒ NO_USABLE_SNAPSHOT_IN_MODE; captura fechada ⇒ NOT_SCORED', () => {
+  it('sin evaluación completa ⇒ NOT_SCORED preliminar; fuente de otro modo se rechaza', () => {
     const synthetic = preAssessScorability(
       makeReservation(),
       { hasScores: false, hasUsableSnapshot: false },
@@ -60,7 +71,7 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
     const captured = preAssessScorability(
       makeReservation(),
       { hasScores: false, hasUsableSnapshot: false },
-      { ...readOnly, servicesTemporalEvidence: 'CAPTURED_AT_BOOKING' },
+      readOnly,
     );
     assert.equal(captured.availability, 'NOT_SCORED');
 
@@ -70,7 +81,6 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
       { hasScores: false, hasUsableSnapshot: false },
       {
         mode: 'SYNTHETIC_DEMO_ONLY',
-        servicesTemporalEvidence: 'CAPTURED_AT_BOOKING',
         snapshotEvidenceSource: 'SYNTHETIC_DEMO_ONLY',
       },
     );
@@ -82,7 +92,6 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
       { hasScores: false, hasUsableSnapshot: false },
       {
         ...readOnly,
-        servicesTemporalEvidence: 'CAPTURED_AT_BOOKING',
         snapshotEvidenceSource: 'SYNTHETIC_DEMO_ONLY',
       },
     );

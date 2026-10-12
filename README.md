@@ -15,8 +15,11 @@ modificarlo.
 >   probabilidad de inasistencia ni riesgo clínico; `operationalUseAllowed=false` siempre.
 >
 > Las probabilidades son estimaciones exploratorias no calibradas (`EXPLORATORY_NOT_VALIDATED`). Con la
-> réplica actual de FLOWww ninguna reserva real demuestra su foto al reservar (0 de 8.887 al corte
-> 2026-10-12): en datos reales la API responde `NOT_SCORABLE` con motivos verificados.
+> reglas confirmadas de FLOWww, una reserva sin copias históricas ni eventos contradictorios conserva
+> el horario y los servicios originales (`FLOWWW_UNCHANGED_BOOKING`). Se evalúan además cliente,
+> creación y catálogo. Las reservas modificadas siguen restringidas mientras no se reconstruya una
+> versión original compatible con el entrenamiento; el listado muestra `NOT_SCORED` preliminar
+> hasta la verificación completa en `/risk` o `/predictions`.
 
 ## Arquitectura y datos
 

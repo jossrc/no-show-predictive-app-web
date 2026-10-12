@@ -28,7 +28,7 @@ function seed(count: number): string[] {
 }
 
 describe('GET /api/v1/reservations (HU-01/HU-03)', () => {
-  it('lista paginada (25 por defecto) con riesgo null, política pendiente y motivos NOT_SCORABLE', async () => {
+  it('lista paginada (25 por defecto) con riesgo null y estado NOT_SCORED preliminar', async () => {
     ctx = buildTestApp();
     seed(30);
     const response = await list('from=2026-11-01&to=2026-11-30');
@@ -40,13 +40,9 @@ describe('GET /api/v1/reservations (HU-01/HU-03)', () => {
     assert.equal(body.sourceStatus, 'READ_ONLY_EXISTING_SCHEDULE');
     const item = body.data[0];
     assert.equal(item.risk.riskLevel, null);
-    assert.equal(item.risk.predictionAvailability, 'NOT_SCORABLE');
+    assert.equal(item.risk.predictionAvailability, 'NOT_SCORED');
     assert.deepEqual(item.risk.probabilities, []);
-    assert.ok(
-      item.risk.notScorableReasons.some(
-        (r: { code: string }) => r.code === 'SCHEDULED_SERVICES_NOT_POINT_IN_TIME',
-      ),
-    );
+    assert.deepEqual(item.risk.notScorableReasons, []);
     assert.doesNotMatch(
       response.body,
       /"riskLevel":"(LOW|MEDIUM|HIGH)"/,

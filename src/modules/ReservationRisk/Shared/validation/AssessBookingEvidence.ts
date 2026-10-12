@@ -29,8 +29,14 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
   if (predictionAt !== null && predictionAt.getTime() >= evidence.appointmentAt.getTime()) {
     codes.add('BOOKING_NOT_BEFORE_APPOINTMENT');
   }
-  if (evidence.hasRescheduleEvent) codes.add('RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT');
-  if (evidence.servicesTemporalEvidence !== 'CAPTURED_AT_BOOKING') {
+  if (evidence.hasRescheduleEvent || evidence.historicalVersions.some((v) => v.scheduleChanged)) {
+    codes.add('RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT');
+  }
+  const unchangedBooking =
+    evidence.servicesTemporalEvidence === 'FLOWWW_UNCHANGED_BOOKING' &&
+    evidence.historicalVersions.length === 0 &&
+    !evidence.hasRescheduleEvent;
+  if (evidence.servicesTemporalEvidence !== 'CAPTURED_AT_BOOKING' && !unchangedBooking) {
     codes.add('SCHEDULED_SERVICES_NOT_POINT_IN_TIME');
   }
 
@@ -74,6 +80,7 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
         isMedicalEvaluation: line.isMedicalEvaluation,
       })),
       evidenceSource: evidence.evidenceSource,
+      servicesTemporalEvidence: evidence.servicesTemporalEvidence,
     },
   };
 }

@@ -26,7 +26,8 @@ export type BookingSnapshotResolution =
  * 1) snapshot inmutable ya persistido con la evidencia admitida por el modo activo;
  * 2) evidencia de la fuente del MISMO modo (réplica real si demuestra el estado al reservar, o
  *    fixture sintética versionada en SYNTHETIC_DEMO_ONLY); una fuente de otro modo se rechaza;
- * 3) en otro caso NOT_SCORABLE con motivos. Nunca reconstruye con datos que pudieron cambiar.
+ *    FLOWww acredita los servicios sin cambios por ausencia de copias y eventos contradictorios;
+ * 3) en otro caso NOT_SCORABLE con motivos. No usa servicios actuales de versiones modificadas.
  */
 export class BookingSnapshotResolver {
   constructor(

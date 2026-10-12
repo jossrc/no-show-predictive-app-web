@@ -18,10 +18,53 @@ describe('AssessBookingEvidence (¿la réplica demuestra la foto al reservar?)',
     );
   });
 
-  it('réplica actual sin evidencia temporal de servicios (caso real FLOWww) ⇒ NOT_SCORABLE', () => {
+  it('réplica sin verificación individual de modificaciones ⇒ NOT_SCORABLE', () => {
     assert.deepEqual(codes({ servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' }), [
       'SCHEDULED_SERVICES_NOT_POINT_IN_TIME',
     ]);
+  });
+
+  it('FLOWww sin copias ni eventos ⇒ VERIFIED con procedencia derivada explícita', () => {
+    const result = assessBookingEvidence(
+      makeBookingEvidence({
+        servicesTemporalEvidence: 'FLOWWW_UNCHANGED_BOOKING',
+      }),
+    );
+    assert.equal(result.kind, 'VERIFIED');
+    if (result.kind === 'VERIFIED') {
+      assert.equal(result.snapshot.servicesTemporalEvidence, 'FLOWWW_UNCHANGED_BOOKING');
+      assert.equal(result.snapshot.evidenceSource, 'VERIFIED_BOOKING_SNAPSHOT');
+    }
+  });
+
+  it('FLOWww con evento contradictorio no acepta la etiqueta de ausencia de cambios', () => {
+    assert.deepEqual(
+      codes({
+        servicesTemporalEvidence: 'FLOWWW_UNCHANGED_BOOKING',
+        hasRescheduleEvent: true,
+      }),
+      ['RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT', 'SCHEDULED_SERVICES_NOT_POINT_IN_TIME'],
+    );
+  });
+
+  it('FLOWww con copias de servicios no usa servicios actuales como originales', () => {
+    assert.deepEqual(
+      codes({
+        servicesTemporalEvidence: 'FLOWWW_UNCHANGED_BOOKING',
+        historicalVersions: [
+          {
+            reservationId: '900000000001099',
+            originalReservationId: '900000000001001',
+            appointmentAt: new Date('2026-11-12T20:00:00Z'),
+            appointmentEndAt: null,
+            scheduleChanged: false,
+            servicesChanged: true,
+            services: [],
+          },
+        ],
+      }),
+      ['SCHEDULED_SERVICES_NOT_POINT_IN_TIME'],
+    );
   });
 
   it('DiaryGCreated faltante ⇒ NOT_SCORABLE_MISSING_BOOKING_TIME (sin inventar corte)', () => {

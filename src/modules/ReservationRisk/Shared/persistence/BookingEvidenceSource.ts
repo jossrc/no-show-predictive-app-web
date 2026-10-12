@@ -9,10 +9,6 @@ import type { BookingEvidence } from '../models/BookingEvidence.js';
 export interface BookingEvidenceSource {
   /** Única clase de evidencia que esta fuente puede producir (los modos nunca se mezclan). */
   readonly snapshotEvidenceSource: SnapshotEvidenceSource;
-  /**
-   * Capacidad de la fuente: si sus líneas de servicio tienen evidencia temporal de la reserva.
-   * La réplica actual (diary_det / appointment_services) no la tiene.
-   */
-  readonly servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' | 'CAPTURED_AT_BOOKING';
+  // La evidencia temporal se determina por reserva en load(), nunca por toda la fuente.
   load(reservationId: DecimalId): Promise<BookingEvidence | null>;
 }

@@ -38,7 +38,6 @@ function setup(policy: RiskLevelPolicy = new PendingValidationRiskLevelPolicy())
     reservations,
     policy,
     evidenceSource: {
-      servicesTemporalEvidence: 'NONE_CURRENT_REPLICA',
       snapshotEvidenceSource: 'VERIFIED_BOOKING_SNAPSHOT',
     },
     scores: store,
@@ -164,7 +163,7 @@ describe('ListReservationRisks (HU-01/HU-03)', () => {
       second.items.map((i) => i.reservation.reservationId),
       [ids[2], ids[3]],
     );
-    assert.equal(second.items[1]!.predictionAvailability, 'NOT_SCORABLE');
+    assert.equal(second.items[1]!.predictionAvailability, 'NOT_SCORED');
     assert.equal(second.nextCursor, null);
 
     // Quitar el orden restaura el mismo universo cronológico del período.

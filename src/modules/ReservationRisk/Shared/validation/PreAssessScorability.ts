@@ -9,7 +9,6 @@ import {
   type NotScorableReason,
   type NotScorableReasonCode,
 } from '../models/NotScorableReason.js';
-import type { BookingEvidenceSource } from '../persistence/BookingEvidenceSource.js';
 
 export type PredictionAvailability = 'AVAILABLE_EXPLORATORY' | 'NOT_SCORED' | 'NOT_SCORABLE';
 
@@ -27,7 +26,6 @@ export function preAssessScorability(
   facts: { hasScores: boolean; hasUsableSnapshot: boolean },
   context: {
     mode: DataSourceMode;
-    servicesTemporalEvidence: BookingEvidenceSource['servicesTemporalEvidence'];
     snapshotEvidenceSource: SnapshotEvidenceSource;
   },
 ): ScorabilityPreAssessment {
@@ -43,9 +41,11 @@ export function preAssessScorability(
   } else {
     if (reservation.bookingCreatedAt === null) codes.push('MISSING_BOOKING_TIME');
     if (reservation.hasRescheduleEvent) codes.push('RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT');
-    if (context.servicesTemporalEvidence !== 'CAPTURED_AT_BOOKING') {
-      codes.push('SCHEDULED_SERVICES_NOT_POINT_IN_TIME');
-    }
+    if (
+      reservation.bookingCreatedAt !== null &&
+      reservation.bookingCreatedAt.getTime() >= reservation.appointmentAt.getTime()
+    )
+      codes.push('BOOKING_NOT_BEFORE_APPOINTMENT');
   }
 
   return codes.length > 0

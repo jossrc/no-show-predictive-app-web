@@ -12,6 +12,7 @@ import { NotScorableException } from '../../../../../../src/modules/ReservationR
 import { PendingValidationRiskLevelPolicy } from '../../../../../../src/modules/ReservationRisk/Shared/policy/PendingValidationRiskLevelPolicy.js';
 import { ReservationNotFoundException } from '../../../../../../src/modules/Reservations/Shared/errors/ReservationNotFoundException.js';
 import type { DataSourceMode } from '../../../../../../src/shared/data/DataSourceMode.js';
+import { PREDICTOR_COLUMNS } from '../../../../../../src/infrastructure/http/ml/MlFeatureContract.js';
 import { FakeBookingEvidenceSource } from '../../../../../helpers/FakeBookingEvidenceSource.js';
 import { FakePredictionClient } from '../../../../../helpers/FakePredictionClient.js';
 import { FixedClock } from '../../../../../helpers/FixedClock.js';
@@ -78,7 +79,7 @@ describe('RequestReservationPrediction (HU-02 acción explícita e idempotente)'
   });
 
   it('snapshot verificado ⇒ crea snapshot, llama compare UNA vez y persiste RF y XGB con identidad', async () => {
-    ctx.evidence.add(makeBookingEvidence());
+    ctx.evidence.add(makeBookingEvidence({ servicesTemporalEvidence: 'FLOWWW_UNCHANGED_BOOKING' }));
     ctx.history.add({
       clientId: SYNTHETIC_CLIENT_ID,
       appointmentId: '1',
@@ -110,11 +111,13 @@ describe('RequestReservationPrediction (HU-02 acción explícita e idempotente)'
     // Las features enviadas son exactamente las del snapshot persistido (con historial as-of).
     const sent = ctx.ml.callsOf('compare')[0]!.request as { features: Record<string, unknown> };
     assert.deepEqual(sent.features, ctx.store.snapshots[0]!.features);
+    assert.equal(Object.keys(sent.features).length, 19);
+    assert.deepEqual(Object.keys(sent.features).sort(), [...PREDICTOR_COLUMNS].sort());
     assert.equal(sent.features.previous_attended, 1);
   });
 
   it('segunda petición idéntica ⇒ reutiliza resultados, NO llama a Python ni duplica registros', async () => {
-    ctx.evidence.add(makeBookingEvidence());
+    ctx.evidence.add(makeBookingEvidence({ servicesTemporalEvidence: 'FLOWWW_UNCHANGED_BOOKING' }));
     await ctx.execute();
     const replay = await ctx.execute();
     assert.equal(replay.run.replayed, true);

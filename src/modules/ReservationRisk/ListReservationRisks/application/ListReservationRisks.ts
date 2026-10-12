@@ -30,10 +30,7 @@ import type {
 export interface ListReservationRisksDependencies {
   readonly reservations: ReservationRepository;
   readonly policy: RiskLevelPolicy;
-  readonly evidenceSource: Pick<
-    BookingEvidenceSource,
-    'servicesTemporalEvidence' | 'snapshotEvidenceSource'
-  >;
+  readonly evidenceSource: Pick<BookingEvidenceSource, 'snapshotEvidenceSource'>;
   /** Política research vigente según el almacén local (sin llamar a Python). */
   readonly scores: Pick<ReservationScoreReader, 'currentExperimentalPolicy'>;
   readonly mode: DataSourceMode;
@@ -175,7 +172,6 @@ export class ListReservationRisks {
       { hasScores: row.scores.length > 0, hasUsableSnapshot: row.hasUsableSnapshot },
       {
         mode: this.deps.mode,
-        servicesTemporalEvidence: this.deps.evidenceSource.servicesTemporalEvidence,
         snapshotEvidenceSource: this.deps.evidenceSource.snapshotEvidenceSource,
       },
     );

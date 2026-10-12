@@ -23,6 +23,20 @@ function failingRepository(
 }
 
 describe('BookingSnapshotResolver', () => {
+  it('sin snapshot persistido, ausencia verificada de copias FLOWww ⇒ VERIFIED_SOURCE', async () => {
+    const evidence = new FakeBookingEvidenceSource();
+    evidence.add(makeBookingEvidence({ servicesTemporalEvidence: 'FLOWWW_UNCHANGED_BOOKING' }));
+    const resolver = new BookingSnapshotResolver(
+      failingRepository('PREDICTIVE_SCHEMA_NOT_MIGRATED'),
+      evidence,
+      'READ_ONLY_EXISTING_SCHEDULE',
+    );
+    const resolution = await resolver.resolve(makeReservation());
+    assert.equal(resolution.kind, 'VERIFIED_SOURCE');
+    if (resolution.kind === 'VERIFIED_SOURCE') {
+      assert.equal(resolution.verified.servicesTemporalEvidence, 'FLOWWW_UNCHANGED_BOOKING');
+    }
+  });
   it('almacén predictivo sin migrar en lectura ⇒ continúa con la evidencia (NOT_SCORABLE informativo)', async () => {
     const evidence = new FakeBookingEvidenceSource();
     evidence.add(makeBookingEvidence({ servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' }));

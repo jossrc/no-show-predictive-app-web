@@ -12,6 +12,26 @@ export interface EvidenceServiceLine extends ScheduledServiceLine {
   readonly catalogResolved: boolean;
 }
 
+export type ServicesTemporalEvidence =
+  'NONE_CURRENT_REPLICA' | 'CAPTURED_AT_BOOKING' | 'FLOWWW_UNCHANGED_BOOKING';
+
+/** Versiones anteriores, vinculadas por DiaryGDelayedID; no son reservas independientes. */
+export interface HistoricalBookingVersion {
+  readonly reservationId: DecimalId;
+  readonly originalReservationId: DecimalId;
+  readonly appointmentAt: Date | null;
+  readonly appointmentEndAt: Date | null;
+  readonly scheduleChanged: boolean;
+  readonly servicesChanged: boolean;
+  readonly services: readonly {
+    readonly sourceDetailId: DecimalId;
+    readonly productId: DecimalId | null;
+    readonly packId: DecimalId;
+    readonly voucherId: DecimalId;
+    readonly plannedSessionNumber: number;
+  }[];
+}
+
 export interface BookingEvidence {
   readonly reservationId: DecimalId;
   readonly clientId: DecimalId;
@@ -22,6 +42,7 @@ export interface BookingEvidence {
   readonly appointmentEndAt: Date | null;
   readonly fwaFlag: number | null;
   readonly hasRescheduleEvent: boolean;
+  readonly historicalVersions: readonly HistoricalBookingVersion[];
   readonly client: {
     readonly birthDate: string | null;
     readonly sex: string | null;
@@ -29,10 +50,11 @@ export interface BookingEvidence {
   } | null;
   readonly services: readonly EvidenceServiceLine[];
   /**
-   * NONE_CURRENT_REPLICA: diary_det/appointment_services no guardan cuándo se creó cada línea;
-   * solo hay estado replicado actual. CAPTURED_AT_BOOKING requeriría una captura fechada.
+   * FLOWWW_UNCHANGED_BOOKING: sin copias históricas ni eventos contradictorios, los servicios
+   * siguen siendo los originales por la regla de FLOWww. No equivale a una captura fechada.
+   * NONE_CURRENT_REPLICA: no se ha acreditado el estado al reservar.
    */
-  readonly servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' | 'CAPTURED_AT_BOOKING';
+  readonly servicesTemporalEvidence: ServicesTemporalEvidence;
   readonly sourceIngestionBatchId: string | null;
   /** Procedencia: réplica real (VERIFIED_BOOKING_SNAPSHOT si se acredita) o fixture sintética. */
   readonly evidenceSource: SnapshotEvidenceSource;

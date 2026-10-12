@@ -86,6 +86,7 @@ export function makeBookingEvidence(overrides: Partial<BookingEvidence> = {}): B
     fwaFlag: 0,
     hasRescheduleEvent: false,
     client: { birthDate: '1998-03-15', sex: 'F', lastModifiedAt: new Date('2026-01-01T00:00:00Z') },
+    historicalVersions: [],
     services: [
       {
         sourceDetailId: '900000000003001',
