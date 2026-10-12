@@ -43,14 +43,11 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
     codes.add('CLIENT_ATTRIBUTES_NOT_POINT_IN_TIME');
   }
 
-  if (predictionAt !== null) {
-    const catalogVerifiable = evidence.services.every(
-      (line) =>
-        line.productFound &&
-        line.catalogResolved &&
-        line.catalogLastModifiedAt.every((stamp) => modifiedBeforeBooking(stamp, predictionAt)),
-    );
-    if (!catalogVerifiable) codes.add('CATALOG_NOT_POINT_IN_TIME');
+  const catalogUnresolved = evidence.services.some(
+    (line) => !line.productFound || !line.catalogResolved,
+  );
+  if (catalogUnresolved) {
+    codes.add('CATALOG_UNRESOLVED');
   }
 
   if (codes.size > 0 || predictionAt === null || evidence.client === null) {

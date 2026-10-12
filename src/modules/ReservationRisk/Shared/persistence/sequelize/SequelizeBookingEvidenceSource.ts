@@ -47,19 +47,10 @@ SELECT s.source_detail_id::text AS source_detail_id,
        s.is_medical_evaluation AS is_medical_evaluation,
        p."ProductID" IS NOT NULL AS product_found,
        r.product_id IS NOT NULL AS catalog_resolved,
-       r.body_area_product_id::text AS body_area_product_id,
-       p."ProductStamp" AT TIME ZONE 'America/Lima' AS product_modified_at,
-       CASE WHEN r.voucher_zone_product_id IS NULL THEN NULL
-            ELSE z."ProductStamp" AT TIME ZONE 'America/Lima' END AS zone_modified_at,
-       r.voucher_zone_product_id IS NOT NULL AS has_zone,
-       CASE WHEN r.body_area_product_id IS NULL THEN NULL
-            ELSE ba."ProductStamp" AT TIME ZONE 'America/Lima' END AS body_area_modified_at,
-       r.body_area_product_id IS NOT NULL AS has_body_area
+       r.body_area_product_id::text AS body_area_product_id
 FROM analytics.appointment_services s
 LEFT JOIN analytics.product_catalog_resolution r ON r.product_id = s.product_id
 LEFT JOIN raw_flow.x_config_products_det p ON p."ProductID" = s.product_id
-LEFT JOIN raw_flow.x_config_products_det z ON z."ProductID" = r.voucher_zone_product_id
-LEFT JOIN raw_flow.x_config_products_det ba ON ba."ProductID" = r.body_area_product_id
 WHERE s.appointment_id = $1::bigint AND s.service_phase = 'SCHEDULED'
 ORDER BY s.source_detail_id`;
 
@@ -89,18 +80,9 @@ interface ServiceRow {
   product_found: boolean;
   catalog_resolved: boolean;
   body_area_product_id: string | null;
-  product_modified_at: Date | null;
-  zone_modified_at: Date | null;
-  has_zone: boolean;
-  body_area_modified_at: Date | null;
-  has_body_area: boolean;
 }
 
 function mapService(row: ServiceRow): EvidenceServiceLine {
-  const stamps: (Date | null)[] = [row.product_modified_at];
-  if (row.has_zone) stamps.push(row.zone_modified_at);
-  if (row.has_body_area) stamps.push(row.body_area_modified_at);
-
   return {
     sourceDetailId: row.source_detail_id,
     productId: row.product_id,
@@ -109,7 +91,6 @@ function mapService(row: ServiceRow): EvidenceServiceLine {
     isMedicalEvaluation: row.is_medical_evaluation,
     productFound: row.product_found === true,
     catalogResolved: row.catalog_resolved === true,
-    catalogLastModifiedAt: stamps,
   };
 }
 

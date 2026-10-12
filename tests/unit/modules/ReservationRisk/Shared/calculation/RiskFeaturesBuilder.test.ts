@@ -261,18 +261,19 @@ describe('RiskFeaturesBuilder (19 predictoras as-of booking_creation)', () => {
     }
   });
 
-  it('11 catálogo mutable sin evidencia ⇒ NOT_SCORABLE; atributo desconocido ⇒ null, nunca false inventado', () => {
-    const changedAfterBooking = assessBookingEvidence(
+  it('11 catálogo sin identificar o resolver ⇒ NOT_SCORABLE; atributo desconocido ⇒ null, nunca false inventado', () => {
+    const unresolvedCatalog = assessBookingEvidence(
       makeBookingEvidence({
         services: [
           {
             ...makeBookingEvidence().services[0]!,
-            catalogLastModifiedAt: [new Date('2026-10-25T00:00:00Z')],
+            productFound: false,
+            catalogResolved: false,
           },
         ],
       }),
     );
-    assert.equal(changedAfterBooking.kind, 'NOT_SCORABLE');
+    assert.equal(unresolvedCatalog.kind, 'NOT_SCORABLE');
 
     const unknownType = built(
       build({

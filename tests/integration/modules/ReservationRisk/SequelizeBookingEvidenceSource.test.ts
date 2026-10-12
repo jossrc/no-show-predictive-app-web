@@ -35,7 +35,7 @@ describe(
       await client?.end();
     });
 
-    it('carga hechos con horas de pared Lima, servicios del ETL y marcas de catálogo/cliente', async () => {
+    it('carga hechos con horas de pared Lima, servicios del ETL y marcas de cliente', async () => {
       const evidence = await source.load(IDS.r1);
       assert.ok(evidence);
       assert.equal(evidence.bookingCreatedAt?.toISOString(), '2026-10-20T16:00:00.000Z');
@@ -48,24 +48,15 @@ describe(
         lastModifiedAt: new Date('2026-01-05T14:00:00Z'),
       });
       assert.equal(evidence.services.length, 1);
-      assert.deepEqual(
-        {
-          ...evidence.services[0],
-          catalogLastModifiedAt: evidence.services[0]!.catalogLastModifiedAt.map((d) =>
-            d?.toISOString(),
-          ),
-        },
-        {
-          sourceDetailId: '900000000003001',
-          productId: '900101',
-          productType: 1,
-          bodyAreaProductId: '101',
-          isMedicalEvaluation: false,
-          productFound: true,
-          catalogResolved: true,
-          catalogLastModifiedAt: ['2025-06-01T05:00:00.000Z', '2025-01-01T05:00:00.000Z'],
-        },
-      );
+      assert.deepEqual(evidence.services[0], {
+        sourceDetailId: '900000000003001',
+        productId: '900101',
+        productType: 1,
+        bodyAreaProductId: '101',
+        isMedicalEvaluation: false,
+        productFound: true,
+        catalogResolved: true,
+      });
       assert.equal(evidence.servicesTemporalEvidence, 'NONE_CURRENT_REPLICA');
     });
 
@@ -80,7 +71,6 @@ describe(
       assert.deepEqual(await codes(IDS.r2), [
         'SCHEDULED_SERVICES_NOT_POINT_IN_TIME',
         'CLIENT_ATTRIBUTES_NOT_POINT_IN_TIME',
-        'CATALOG_NOT_POINT_IN_TIME',
       ]);
       assert.deepEqual(await codes(IDS.rescheduled), [
         'RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT',

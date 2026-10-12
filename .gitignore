@@ -2,6 +2,7 @@
 # Created by git for backups. To disable backups in Git:
 # $ git config --global mergetool.keepBackup false
 *.orig
+PROMPTS/*
 
 # Created by git when using merge tools for conflicts
 # docs/ es material privado; solo se versiona la documentación del Sprint 01 y ADRs.

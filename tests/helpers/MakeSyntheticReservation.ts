@@ -95,7 +95,6 @@ export function makeBookingEvidence(overrides: Partial<BookingEvidence> = {}): B
         isMedicalEvaluation: false,
         productFound: true,
         catalogResolved: true,
-        catalogLastModifiedAt: [new Date('2025-06-01T00:00:00Z'), new Date('2025-06-01T00:00:00Z')],
       },
     ],
     servicesTemporalEvidence: 'CAPTURED_AT_BOOKING',

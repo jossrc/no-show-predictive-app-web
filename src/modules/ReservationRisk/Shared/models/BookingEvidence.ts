@@ -10,8 +10,6 @@ import type { ScheduledServiceLine } from './VerifiedBookingSnapshot.js';
 export interface EvidenceServiceLine extends ScheduledServiceLine {
   readonly productFound: boolean;
   readonly catalogResolved: boolean;
-  /** Última modificación conocida de cada fila de catálogo implicada (null = desconocida). */
-  readonly catalogLastModifiedAt: readonly (Date | null)[];
 }
 
 export interface BookingEvidence {

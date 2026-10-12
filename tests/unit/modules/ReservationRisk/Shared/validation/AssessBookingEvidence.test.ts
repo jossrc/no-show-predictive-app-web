@@ -54,20 +54,13 @@ describe('AssessBookingEvidence (¿la réplica demuestra la foto al reservar?)',
     assert.deepEqual(codes({ client: null }), ['CLIENT_NOT_FOUND']);
   });
 
-  it('catálogo cambiado tras la reserva, producto inexistente o sin resolución ⇒ bloqueo', () => {
+  it('producto inexistente o sin resolución de catálogo ⇒ CATALOG_UNRESOLVED', () => {
     const line = makeBookingEvidence().services[0]!;
-    assert.deepEqual(
-      codes({ services: [{ ...line, catalogLastModifiedAt: [new Date('2026-12-01Z')] }] }),
-      ['CATALOG_NOT_POINT_IN_TIME'],
-    );
     assert.deepEqual(codes({ services: [{ ...line, productFound: false }] }), [
-      'CATALOG_NOT_POINT_IN_TIME',
+      'CATALOG_UNRESOLVED',
     ]);
     assert.deepEqual(codes({ services: [{ ...line, catalogResolved: false }] }), [
-      'CATALOG_NOT_POINT_IN_TIME',
-    ]);
-    assert.deepEqual(codes({ services: [{ ...line, catalogLastModifiedAt: [null] }] }), [
-      'CATALOG_NOT_POINT_IN_TIME',
+      'CATALOG_UNRESOLVED',
     ]);
   });
 });

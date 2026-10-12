@@ -6,8 +6,6 @@ import type { DecimalId } from '../../../../../shared/identifiers/DecimalId.js';
 import type { BookingEvidence } from '../../models/BookingEvidence.js';
 import type { BookingEvidenceSource } from '../BookingEvidenceSource.js';
 
-/** Catálogo sintético estable, anterior a cualquier reserva del dataset. */
-const SYNTHETIC_CATALOG_STAMP = new Date('2025-06-01T00:00:00.000Z');
 const SYNTHETIC_CLIENT_STAMP = new Date('2026-01-01T00:00:00.000Z');
 
 function toEvidence(fixture: SyntheticReservationFixture): BookingEvidence {
@@ -31,7 +29,6 @@ function toEvidence(fixture: SyntheticReservationFixture): BookingEvidence {
         isMedicalEvaluation: false,
         productFound: true,
         catalogResolved: true,
-        catalogLastModifiedAt: [SYNTHETIC_CATALOG_STAMP, SYNTHETIC_CATALOG_STAMP],
       },
     ],
     // Captura sintética "en el instante de reserva": solo existe en este dataset de demostración.

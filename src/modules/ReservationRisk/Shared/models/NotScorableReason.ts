@@ -18,6 +18,8 @@ export const NOT_SCORABLE_REASON_MESSAGES = {
   INVALID_SOURCE_VALUE: 'La fuente contiene un valor incoherente para construir las predictoras',
   NO_USABLE_SNAPSHOT_IN_MODE:
     'No existe instantánea de reserva utilizable en el modo de datos activo',
+  CATALOG_UNRESOLVED:
+    'No es posible identificar o resolver el catálogo de uno o más servicios programados',
 } as const;
 
 export type NotScorableReasonCode = keyof typeof NOT_SCORABLE_REASON_MESSAGES;
