@@ -3,9 +3,15 @@ import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 import type { ModelScore, NewModelScore } from '../models/ModelScore.js';
 import type { NewPredictionRun } from '../models/PredictionRun.js';
 
+/**
+ * Identidad de idempotencia: snapshot + modelo + versión + política research. Si la política
+ * cambia (otro hash), el score anterior NO se reutiliza ni se reinterpreta: se pide uno nuevo.
+ * `researchPolicyHash = null` identifica scores v1 sin banda experimental.
+ */
 export interface ModelIdentity {
   readonly modelKey: MlModelKey;
   readonly modelVersion: string;
+  readonly researchPolicyHash: string | null;
 }
 
 export interface SavePredictionRunOutcome {
@@ -18,7 +24,7 @@ export interface SavePredictionRunOutcome {
 export interface PredictionResultRepository {
   /** Último resultado por modelo para el snapshot. */
   findLatestBySnapshot(snapshotId: DecimalId): Promise<ModelScore[]>;
-  /** Resultados exactos por identidad (snapshot, modelo, versión): base de la idempotencia. */
+  /** Resultados exactos por identidad (snapshot, modelo, versión, política): idempotencia. */
   findByIdentities(
     snapshotId: DecimalId,
     identities: readonly ModelIdentity[],

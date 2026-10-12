@@ -5,15 +5,14 @@ import type pg from 'pg';
 import pino from 'pino';
 import type { Sequelize } from 'sequelize-typescript';
 import { buildApp } from '../../../src/app/BuildApp.js';
-import {
-  createMlPredictionClient,
-  createPredictiveDependencies,
-} from '../../../src/app/CreatePredictiveDependencies.js';
+import { createMlPredictionClient } from '../../../src/app/CreatePredictiveDependencies.js';
 import { EnvironmentSchema } from '../../../src/config/environment/EnvironmentSchema.js';
 import { createPredictiveConfig } from '../../../src/config/PredictiveConfig.js';
 import { sha256Hex } from '../../../src/shared/security/VerifyInternalApiKey.js';
 import { IDS, seedReservationScenario } from '../../fixtures/database/ReservationScenario.js';
 import { captureSyntheticSnapshots } from '../../fixtures/database/SyntheticDemoSeed.js';
+import { SqlitePredictiveStore } from '../../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { pgTestDbDependencies } from '../../helpers/PgTestDbDependencies.js';
 import { AUTH_HEADERS, healthyCheck, TEST_INTERNAL_API_KEY } from '../../helpers/BuildTestApp.js';
 import {
   connectPg,
@@ -36,13 +35,14 @@ reportSkipped('Sprint01RealMlFlow', skip);
 describe('E2E Sprint 01 con Python real', { skip: skip ?? false }, () => {
   let client: pg.Client;
   let sequelize: Sequelize;
+  const store = SqlitePredictiveStore.open({ path: ':memory:', mode: 'SYNTHETIC_DEMO_ONLY' });
 
   before(async () => {
     await resetTestDatabase();
     client = await connectPg();
     await seedReservationScenario(client);
     sequelize = createTestSequelize();
-    await captureSyntheticSnapshots(sequelize, [IDS.r1, IDS.r2, IDS.unsafe]);
+    await captureSyntheticSnapshots(sequelize, [IDS.r1, IDS.r2, IDS.unsafe], store.snapshots);
   });
   after(async () => {
     await sequelize?.close();
@@ -71,7 +71,7 @@ describe('E2E Sprint 01 con Python real', { skip: skip ?? false }, () => {
       mlHealth: { client: ml, configured: true },
       predictiveApi: {
         internalApiKeySha256: sha256Hex(TEST_INTERNAL_API_KEY),
-        dependencies: createPredictiveDependencies(config, sequelize, ml),
+        dependencies: pgTestDbDependencies(config, sequelize, ml, store),
       },
     });
 

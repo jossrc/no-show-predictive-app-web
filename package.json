@@ -12,6 +12,8 @@
     "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
     "migrate:flow": "node --env-file-if-exists=.env --import tsx src/app/cli/MigrateFlow.ts",
     "migrate:app": "node --env-file-if-exists=.env --import tsx src/app/cli/MigrateApp.ts",
+    "store:status": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts status",
+    "store:backup": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts backup",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

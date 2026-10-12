@@ -26,6 +26,13 @@ export const RISK_FEATURES_BUILDER_VERSION = 'risk_features_builder_v1';
 /** Filtro del ETL 14 de entrenamiento: anticipación > 730 días queda fuera de población. */
 export const MAX_TRAINING_LEAD_DAYS = 730;
 export const MIN_MODEL_AGE = 16;
+/**
+ * Auditoría read-only 2026-10-12: appointment_training_dataset_v1 solo contiene ISODOW 1–6
+ * (0 domingos en 213.873 filas; 0 discrepancias con ISODOW de appointment_at en Lima). Un
+ * domingo se envía como 7 (ISO, igual que el ETL 14) y se advierte: fuera de la distribución
+ * de entrenamiento. Nunca se reetiqueta 7→0.
+ */
+export const WEEKDAYS_ABSENT_FROM_TRAINING: readonly number[] = [7];
 export const MAX_MODEL_AGE = 95;
 
 const MS_PER_DAY = 86_400_000;
@@ -39,6 +46,7 @@ export type FeatureWarning =
   | 'UNEXPECTED_CLIENT_SEX_VALUE'
   | 'END_BEFORE_START_DURATION_NULL'
   | 'ZERO_SCHEDULED_SERVICES_OUT_OF_TRAINING_POPULATION'
+  | 'WEEKDAY_ABSENT_FROM_TRAINING_DATA'
   | 'POSITIVE_COUNT_WITHOUT_RECENCY';
 
 export interface BuiltRiskFeatures {
@@ -97,6 +105,9 @@ export class RiskFeaturesBuilder {
     const lines = snapshot.scheduledServices;
     const services = this.serviceFeatures(lines);
     if (lines.length === 0) warnings.push('ZERO_SCHEDULED_SERVICES_OUT_OF_TRAINING_POPULATION');
+    if (WEEKDAYS_ABSENT_FROM_TRAINING.includes(appointment.isoWeekday)) {
+      warnings.push('WEEKDAY_ABSENT_FROM_TRAINING_DATA');
+    }
 
     const attended = history.previousAttended;
     const noShow = history.previousNoShow;

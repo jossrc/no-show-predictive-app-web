@@ -8,15 +8,16 @@ import type pg from 'pg';
 import pino from 'pino';
 import type { Sequelize } from 'sequelize-typescript';
 import { buildApp } from '../../src/app/BuildApp.js';
-import {
-  createMlPredictionClient,
-  createPredictiveDependencies,
-} from '../../src/app/CreatePredictiveDependencies.js';
+import { DatabaseSync } from 'node:sqlite';
+import { createMlPredictionClient } from '../../src/app/CreatePredictiveDependencies.js';
 import { EnvironmentSchema } from '../../src/config/environment/EnvironmentSchema.js';
 import { createPredictiveConfig } from '../../src/config/PredictiveConfig.js';
 import type { MlCompareRequest } from '../../src/infrastructure/http/ml/MlContractTypes.js';
 import type { MlPredictionClient } from '../../src/infrastructure/http/ml/MlPredictionClient.js';
 import { SequelizeClientHistoryRepository } from '../../src/modules/ClientHistory/Shared/persistence/sequelize/SequelizeClientHistoryRepository.js';
+import { SqlitePredictiveStore } from '../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { buildReservationListQuery } from '../../src/modules/Reservations/Shared/persistence/sequelize/ReservationSql.js';
+import { pgTestDbDependencies } from '../helpers/PgTestDbDependencies.js';
 import { sha256Hex } from '../../src/shared/security/VerifyInternalApiKey.js';
 import { AUTH_HEADERS, healthyCheck, TEST_INTERNAL_API_KEY } from '../helpers/BuildTestApp.js';
 import { FakePredictionClient } from '../helpers/FakePredictionClient.js';
@@ -78,11 +79,11 @@ async function measure(
   return stats(samples);
 }
 
-/** Inserta N reservas FUTURE sintéticas y scores para la mitad, con generate_series (en SQL). */
-async function seedVolume(client: pg.Client, total: number): Promise<void> {
-  await client.query(
-    'TRUNCATE ml.prediction_model_results, ml.prediction_runs, ml.booking_feature_snapshots RESTART IDENTITY CASCADE',
-  );
+/**
+ * Inserta N reservas FUTURE sintéticas en la réplica de PRUEBA (generate_series) y, en el
+ * almacén SQLite local, snapshots + scores RF/XGB para la mitad (como en runtime).
+ */
+async function seedVolume(client: pg.Client, local: DatabaseSync, total: number): Promise<void> {
   await client.query('TRUNCATE analytics.appointment_outcomes');
   await client.query(
     `INSERT INTO analytics.appointment_outcomes (appointment_id, client_id, clinic_id, appointment_at, created_at_source,
@@ -93,23 +94,53 @@ async function seedVolume(client: pg.Client, total: number): Promise<void> {
     FROM generate_series(1, $1::int) g`,
     [total],
   );
-  await client.query(`INSERT INTO ml.booking_feature_snapshots (reservation_id, client_id, snapshot_type, prediction_at, appointment_at,
-      feature_version, builder_version, snapshot_hash, features, evidence_source)
-    SELECT appointment_id, client_id, 'booking_creation', created_at_source, appointment_at, 'BOOKING_BASELINE_V1',
-           'risk_features_builder_v1', md5(appointment_id::text) || md5(appointment_id::text || 'x'), '{}'::jsonb, 'SYNTHETIC_DEMO_ONLY'
-    FROM analytics.appointment_outcomes WHERE appointment_id % 2 = 0`);
-  await client.query(`INSERT INTO ml.prediction_runs (run_uid, snapshot_id, reservation_id, mode, requested_model_keys, request_id, run_requested_at, completed_at, ml_latency_ms)
-    SELECT gen_random_uuid(), snapshot_id, reservation_id, 'compare', ARRAY['random_forest_full_v1','xgboost_full_v1'], 'perf', now(), now(), 10
-    FROM ml.booking_feature_snapshots`);
-  await client.query(`INSERT INTO ml.prediction_model_results (run_id, snapshot_id, reservation_id, model_key, algorithm, model_version, model_hash,
-      feature_version, prediction_at, scored_at, probability_no_show, prediction_target, validation_status, calibration_status)
-    SELECT r.run_id, r.snapshot_id, r.reservation_id, m.key, m.alg, m.key || ':abc123def456', 'abc123def456', 'BOOKING_BASELINE_V1',
-           now(), now(), ((r.reservation_id * 7919) % 1000) / 1000.0, 'NO_SHOW_CANDIDATE', 'EXPLORATORY_NOT_VALIDATED', 'not_operationally_validated'
-    FROM ml.prediction_runs r
-    CROSS JOIN (VALUES ('random_forest_full_v1', 'random_forest'), ('xgboost_full_v1', 'xgboost')) AS m(key, alg)`);
-  await client.query(
-    'ANALYZE analytics.appointment_outcomes; ANALYZE ml.prediction_model_results; ANALYZE ml.booking_feature_snapshots; ANALYZE ml.prediction_runs',
-  );
+  await client.query('ANALYZE analytics.appointment_outcomes');
+
+  // Volumen aislado por iteración: almacén local nuevo (los triggers impiden borrar filas).
+  local.exec('BEGIN IMMEDIATE');
+  const snapshot = local.prepare(`INSERT INTO booking_feature_snapshots (reservation_id, client_id,
+      snapshot_type, prediction_at, appointment_at, feature_version, builder_version, snapshot_hash,
+      features_json, evidence_source, evidence_json, created_at)
+    VALUES (?, ?, 'booking_creation', '2026-10-01T13:00:00.000Z', '2026-11-01T13:00:00.000Z',
+      'BOOKING_BASELINE_V1', 'risk_features_builder_v1', ?, '{}', 'SYNTHETIC_DEMO_ONLY', '{}', ?)
+    RETURNING snapshot_id`);
+  const run =
+    local.prepare(`INSERT INTO prediction_runs (run_uid, snapshot_id, reservation_id, mode,
+      requested_model_keys_json, scoring_api_version, request_id, run_requested_at, completed_at, ml_latency_ms)
+    VALUES (?, ?, ?, 'compare', '[]', 'v1', 'perf', ?, ?, 10) RETURNING run_id`);
+  const result =
+    local.prepare(`INSERT INTO prediction_model_results (run_id, snapshot_id, reservation_id,
+      model_key, algorithm, model_version, model_hash, feature_version, prediction_at, scored_at,
+      probability_no_show, prediction_target, validation_status, calibration_status,
+      operational_use_allowed, risk_policy_status, scoring_api_version)
+    VALUES (?, ?, ?, ?, ?, ?, 'abc123def456', 'BOOKING_BASELINE_V1', ?, ?, ?, 'NO_SHOW_CANDIDATE',
+      'EXPLORATORY_NOT_VALIDATED', 'not_operationally_validated', 0, 'pending_validation', 'v1')`);
+  const now = new Date().toISOString();
+  for (let g = 2; g <= total; g += 2) {
+    const id = String(800000000000000 + g);
+    const hash = `${String(g).padStart(64, '0')}`;
+    const snapshotId = Number(
+      snapshot.get(id, String(810000000000000 + (g % 5000)), hash, now)?.snapshot_id,
+    );
+    const runId = Number(run.get(crypto.randomUUID(), snapshotId, id, now, now)?.run_id);
+    for (const [key, alg] of [
+      ['random_forest_full_v1', 'random_forest'],
+      ['xgboost_full_v1', 'xgboost'],
+    ]) {
+      result.run(
+        runId,
+        snapshotId,
+        id,
+        key!,
+        alg!,
+        `${key}:abc123def456`,
+        now,
+        now,
+        ((g * 7919) % 1000) / 1000,
+      );
+    }
+  }
+  local.exec('COMMIT');
 }
 
 async function seedHistory(client: pg.Client, clientId: string, events: number): Promise<void> {
@@ -130,6 +161,9 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
   let sequelize: Sequelize;
   let app: FastifyInstance;
   let statementCount = 0;
+  let store: SqlitePredictiveStore;
+  let local: DatabaseSync;
+  let config: ReturnType<typeof createPredictiveConfig>;
   const report: Record<string, unknown> = {
     generatedAt: new Date().toISOString(),
     environment: {
@@ -150,13 +184,24 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
       `INSERT INTO raw_flow.x_config_clinics ("ClinicID") SELECT g FROM generate_series(1, 17) g`,
     );
     sequelize = createTestSequelize({ logging: () => void (statementCount += 1) });
-    const config = createPredictiveConfig(
+    config = createPredictiveConfig(
       EnvironmentSchema.parse({
         ...process.env,
         DATA_SOURCE_MODE: 'SYNTHETIC_DEMO_ONLY',
         INTERNAL_API_KEY_SHA256: sha256Hex(TEST_INTERNAL_API_KEY),
       }),
     );
+  });
+
+  /** App nueva por volumen, con su propio almacén SQLite (archivo temporal) sembrado. */
+  async function appForVolume(volume: number): Promise<void> {
+    await app?.close();
+    store?.close();
+    local?.close();
+    const file = path.join(os.tmpdir(), `nsp-perf-${process.pid}-${volume}-${Date.now()}.sqlite`);
+    store = SqlitePredictiveStore.open({ path: file, mode: 'SYNTHETIC_DEMO_ONLY' });
+    local = new DatabaseSync(file);
+    await seedVolume(client, local, volume);
     app = buildApp({
       postgresHealthCheck: healthyCheck,
       mysqlHealthCheck: null,
@@ -164,15 +209,17 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
       predictiveApi: {
         internalApiKeySha256: sha256Hex(TEST_INTERNAL_API_KEY),
         dependencies: {
-          ...createPredictiveDependencies(config, sequelize, new FakePredictionClient()),
+          ...pgTestDbDependencies(config, sequelize, new FakePredictionClient(), store),
           clock: new FixedClock(new Date('2026-10-25T00:00:00Z')),
         },
       },
     });
-  });
+  }
 
   after(async () => {
     await app?.close();
+    store?.close();
+    local?.close();
     await sequelize?.close();
     await client?.end();
     const directory = path.join(path.resolve(fixturePath('.'), '..'), 'reports/performance');
@@ -185,7 +232,7 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
   it('listado: 1k/10k/100k reservas × limit 1/25/100 × orden cronológico/probabilidad', async () => {
     const results: Record<string, unknown>[] = [];
     for (const volume of [1_000, 10_000, 100_000]) {
-      await seedVolume(client, volume);
+      await appForVolume(volume);
       for (const limit of [1, 25, 100]) {
         for (const sort of ['appointmentAt', 'probabilityNoShow']) {
           const url = `/api/v1/reservations?from=2026-11-01&to=2027-01-24&limit=${limit}&sort=${sort}&direction=desc`;
@@ -212,18 +259,27 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
     console.log(JSON.stringify(results.filter((r) => r.limit === 25)));
   });
 
-  it('EXPLAIN (ANALYZE, BUFFERS) del listado sobre 100k sintéticas', async () => {
-    const plan = await client.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-      SELECT o.appointment_id, sel.probability_no_show FROM analytics.appointment_outcomes o
-      LEFT JOIN LATERAL (SELECT r.probability_no_show FROM ml.prediction_model_results r
-        JOIN ml.booking_feature_snapshots s ON s.snapshot_id = r.snapshot_id AND s.evidence_source = 'SYNTHETIC_DEMO_ONLY'
-        WHERE r.reservation_id = o.appointment_id AND r.model_key = 'random_forest_full_v1'
-        ORDER BY r.scored_at DESC, r.result_id DESC LIMIT 1) sel ON true
-      WHERE o.outcome = 'FUTURE' AND o.appointment_at >= '2026-11-01T05:00Z' AND o.appointment_at < '2027-01-25T05:00Z'
-      ORDER BY sel.probability_no_show DESC NULLS LAST, o.appointment_at, o.appointment_id LIMIT 26`);
+  it('EXPLAIN (ANALYZE, BUFFERS) del listado de la fuente sobre 100k sintéticas (sin schema ml)', async () => {
+    const query = buildReservationListQuery({
+      startInclusive: new Date('2026-11-01T05:00:00Z'),
+      endExclusive: new Date('2027-01-25T05:00:00Z'),
+      status: 'SCHEDULED',
+      clinicId: null,
+      clinicScope: { kind: 'ALL_CLINICS' },
+      direction: 'asc',
+      onlyIds: null,
+      excludeIds: null,
+      after: null,
+      limit: 25,
+    });
+    const plan = await client.query(
+      `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) ${query.sql}`,
+      query.bind,
+    );
     const text = plan.rows.map((row) => row['QUERY PLAN']).join('\n');
-    report.listPlanProbabilitySort = text;
-    assert.match(text, /idx_prediction_results_reservation_model|Index/);
+    report.listPlanChronological = text;
+    assert.match(text, /Index/);
+    assert.doesNotMatch(query.sql, /\bml\./);
   });
 
   it('historial as-of: 0, 1, 1k y 100k eventos del cliente (agregación indexada, sin traer filas)', async () => {

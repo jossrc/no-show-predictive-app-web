@@ -8,6 +8,7 @@
 docs/*
 !docs/sprint-01/
 !docs/adr/
+!docs/backend-node-final-closeout-*.md
 *.BACKUP.*
 *.BASE.*
 *.LOCAL.*
@@ -794,3 +795,7 @@ docker/postgres/data/
 util-docs/
 # Reportes locales de rendimiento/pruebas (pueden regenerarse)
 reports/
+
+# Almacén predictivo local (SQLite: snapshots con edad/sexo, scores) y sus backups: nunca a Git
+.local/
+data-local/

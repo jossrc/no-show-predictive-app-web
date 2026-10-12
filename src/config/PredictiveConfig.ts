@@ -6,7 +6,7 @@ import {
   resolveMlServiceBaseUrl,
 } from '../infrastructure/http/ml/MlServiceUrl.js';
 
-const SYNTHETIC_DATABASE_NAME = /(^|[_-])(test|synthetic|demo)([_-]|$)/i;
+const DEFAULT_STORE_DIRECTORY = '.local/predictive-store';
 
 export interface PredictiveApiConfig {
   readonly enabled: boolean;
@@ -27,12 +27,22 @@ export interface MlServiceConfig {
   readonly circuitFailureThreshold: number;
   readonly circuitCooldownMs: number;
   readonly modelCatalogTtlMs: number;
+  /** Bandas experimentales research v2 (ML_RESEARCH_RISK_ENABLED). */
+  readonly researchRiskEnabled: boolean;
+  readonly expectedResearchPolicyHashes: readonly string[];
+}
+
+export interface PredictiveStoreConfig {
+  readonly driver: 'sqlite';
+  /** Ruta del archivo SQLite local (o `:memory:` en pruebas). */
+  readonly sqlitePath: string;
 }
 
 export interface PredictiveConfig {
   readonly api: PredictiveApiConfig;
   readonly dataSourceMode: DataSourceMode;
   readonly ml: MlServiceConfig;
+  readonly store: PredictiveStoreConfig;
   readonly sourceStatementTimeoutMs: number;
 }
 
@@ -64,24 +74,35 @@ function resolveApiConfig(env: EnvironmentVariables): PredictiveApiConfig {
   return { enabled: true, internalApiKeySha256: env.INTERNAL_API_KEY_SHA256, disabledReason: null };
 }
 
+/**
+ * SYNTHETIC_DEMO_ONLY obtiene reservas, evidencia e historial EXCLUSIVAMENTE del dataset
+ * sintético versionado y persiste en su propio archivo SQLite: no lee ni escribe datos de
+ * negocio en PostgreSQL (solo /health/postgres). Prohibido en production.
+ */
 function resolveDataSourceMode(env: EnvironmentVariables): DataSourceMode {
-  if (env.DATA_SOURCE_MODE !== 'SYNTHETIC_DEMO_ONLY') return env.DATA_SOURCE_MODE;
-
-  if (env.NODE_ENV === 'production') {
+  if (env.DATA_SOURCE_MODE === 'SYNTHETIC_DEMO_ONLY' && env.NODE_ENV === 'production') {
     throw new Error('DATA_SOURCE_MODE=SYNTHETIC_DEMO_ONLY no está permitido en production');
-  }
-  if (!SYNTHETIC_DATABASE_NAME.test(env.DB_NAME_POSTGRES)) {
-    throw new Error(
-      'DATA_SOURCE_MODE=SYNTHETIC_DEMO_ONLY exige una base de prueba aislada (nombre con test/synthetic/demo)',
-    );
   }
   return env.DATA_SOURCE_MODE;
 }
 
+/** Un archivo por modo: un almacén sintético nunca comparte archivo con el real. */
+function resolveStoreConfig(
+  env: EnvironmentVariables,
+  mode: DataSourceMode,
+): PredictiveStoreConfig {
+  return {
+    driver: 'sqlite',
+    sqlitePath:
+      env.PREDICTIVE_STORE_SQLITE_PATH ?? `${DEFAULT_STORE_DIRECTORY}/${mode.toLowerCase()}.sqlite`,
+  };
+}
+
 export function createPredictiveConfig(env: EnvironmentVariables): PredictiveConfig {
+  const dataSourceMode = resolveDataSourceMode(env);
   return {
     api: resolveApiConfig(env),
-    dataSourceMode: resolveDataSourceMode(env),
+    dataSourceMode,
     ml: {
       baseUrl: resolveMlServiceBaseUrl(env.ML_SERVICE_URL, {
         nodeEnv: env.NODE_ENV,
@@ -97,7 +118,10 @@ export function createPredictiveConfig(env: EnvironmentVariables): PredictiveCon
       circuitFailureThreshold: env.ML_CIRCUIT_FAILURE_THRESHOLD,
       circuitCooldownMs: env.ML_CIRCUIT_COOLDOWN_MS,
       modelCatalogTtlMs: env.ML_MODEL_CATALOG_TTL_MS,
+      researchRiskEnabled: env.ML_RESEARCH_RISK_ENABLED,
+      expectedResearchPolicyHashes: env.ML_RESEARCH_EXPECTED_POLICY_HASHES?.split(',') ?? [],
     },
+    store: resolveStoreConfig(env, dataSourceMode),
     sourceStatementTimeoutMs: 10_000,
   };
 }

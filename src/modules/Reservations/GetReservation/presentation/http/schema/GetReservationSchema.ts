@@ -10,7 +10,7 @@ export const GetReservationSchema = {
   tags: ['Reservations'],
   summary: 'Consultar una reserva',
   description:
-    'Devuelve el detalle factual de una reserva accesible, sus scores persistidos y hasUsableSnapshot. No ejecuta inferencias. Las probabilidades son exploratorias; riskLevel permanece null mientras riskPolicyStatus=pending_validation. Una reserva real sin evidencia histórica temporalmente verificable continúa NOT_SCORABLE.',
+    'Devuelve el detalle factual de una reserva accesible, sus scores persistidos y hasUsableSnapshot. No ejecuta inferencias. Las probabilidades son exploratorias; riskLevel (operativo) permanece null mientras riskPolicyStatus=pending_validation; cada score incluye experimentalRisk (banda exploratoria research v2) o null si se obtuvo sin política research. Una reserva real sin evidencia histórica temporalmente verificable continúa NOT_SCORABLE.',
   security: [{ InternalApiKey: [] }],
   params: ReservationIdParamsSchema,
   response: {

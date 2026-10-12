@@ -46,3 +46,16 @@
   builder rechaza un historial de otro cliente o con marcas ≥ corte.
 - Un snapshot persistido es inmutable (trigger) y se reutiliza para SHAP; un cambio posterior de
   la fuente produce otro hash, nunca reescribe el original.
+
+## Domingos (ISODOW) — verificado 2026-10-12
+
+`appointment_training_dataset_v1` contiene solo `appointment_weekday` 1–6 (0 domingos en 213.873 filas)
+y coincide al 100 % con `ISODOW(appointment_at AT TIME ZONE 'America/Lima')`; no hay reservas FUTURE en
+domingo. No existe ambigüedad DOW/ISO en los datos: Node y el ETL 14 usan ISO (domingo=7) y **no se
+reetiqueta**. Si apareciera un domingo se envía 7 con el aviso no bloqueante
+`WEEKDAY_ABSENT_FROM_TRAINING_DATA` (fuera de la distribución de entrenamiento).
+
+## Persistencia del snapshot
+
+Desde 2026-10-11 el snapshot se guarda en el almacén SQLite local (ADR-006) con las mismas 19 claves
+canónicas, hash e inmutabilidad; SHAP reutiliza exactamente ese snapshot. Las 19 predictoras no cambian.

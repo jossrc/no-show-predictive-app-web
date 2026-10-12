@@ -2,6 +2,7 @@ import type {
   MlModelKey,
   PredictorName,
 } from '../../../../../infrastructure/http/ml/MlFeatureContract.js';
+import type { ExperimentalRiskSummary } from '../../../../Reservations/Shared/models/ReservationScoreSummary.js';
 
 export interface RiskFactor {
   readonly featureName: PredictorName;
@@ -36,6 +37,8 @@ export interface GetRiskFactorsResult {
     /** Misma versión y hash de modelo que el score persistido de este snapshot. */
     readonly sameModelIdentity: boolean;
     readonly probabilityNoShow: number | null;
+    /** Banda experimental v2 del score persistido (no recalculada por SHAP). */
+    readonly experimentalRisk: ExperimentalRiskSummary | null;
   };
   readonly explanation: {
     readonly method: 'tree_shap';

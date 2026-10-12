@@ -3,12 +3,18 @@ import { InfrastructureException } from '../../../shared/errors/infrastructure/I
 
 export interface PersistenceUnavailableExceptionProps {
   operation: string;
-  reason?: 'QUERY_FAILED' | 'PREDICTIVE_SCHEMA_NOT_MIGRATED' | 'TIMEOUT';
+  reason?:
+    | 'QUERY_FAILED'
+    | 'PREDICTIVE_SCHEMA_NOT_MIGRATED'
+    | 'TIMEOUT'
+    | 'EXPERIMENTAL_RISK_NOT_SUPPORTED'
+    | 'STORE_MODE_MISMATCH'
+    | 'INTEGRITY_VIOLATION';
   metadata?: ExceptionMetadata | undefined;
   cause?: unknown;
 }
 
-/** Fallo del almacén predictivo propio (schema ml). Nunca expone SQL ni stack al cliente. */
+/** Fallo del almacén predictivo propio (SQLite local o schema ml). Nunca expone SQL ni stack. */
 export class PersistenceUnavailableException extends InfrastructureException {
   static readonly CODE = 'PERSISTENCE_UNAVAILABLE';
 

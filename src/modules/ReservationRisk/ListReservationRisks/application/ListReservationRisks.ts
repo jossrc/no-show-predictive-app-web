@@ -14,6 +14,7 @@ import type {
   ReservationListRow,
   ReservationRepository,
 } from '../../../Reservations/Shared/persistence/ReservationRepository.js';
+import type { ReservationScoreReader } from '../../../Reservations/Shared/persistence/ReservationScoreReader.js';
 import { RiskPolicyUnavailableException } from '../../Shared/errors/RiskPolicyUnavailableException.js';
 import type { BookingEvidenceSource } from '../../Shared/persistence/BookingEvidenceSource.js';
 import type { RiskLevelPolicy } from '../../Shared/policy/RiskLevelPolicy.js';
@@ -21,6 +22,7 @@ import { preAssessScorability } from '../../Shared/validation/PreAssessScorabili
 import type { ListReservationRisksInput } from './input/ListReservationRisksInput.js';
 import { resolveListPeriod } from './ResolveListPeriod.js';
 import type {
+  ListExperimentalRiskPolicy,
   ListReservationRisksItem,
   ListReservationRisksResult,
 } from './result/ListReservationRisksResult.js';
@@ -28,14 +30,21 @@ import type {
 export interface ListReservationRisksDependencies {
   readonly reservations: ReservationRepository;
   readonly policy: RiskLevelPolicy;
-  readonly evidenceSource: Pick<BookingEvidenceSource, 'servicesTemporalEvidence'>;
+  readonly evidenceSource: Pick<
+    BookingEvidenceSource,
+    'servicesTemporalEvidence' | 'snapshotEvidenceSource'
+  >;
+  /** Política research vigente según el almacén local (sin llamar a Python). */
+  readonly scores: Pick<ReservationScoreReader, 'currentExperimentalPolicy'>;
   readonly mode: DataSourceMode;
   readonly clock: Clock;
 }
 
 /**
- * HU-01/HU-03: citas programadas del período con sus scores persistidos (una consulta paginada,
- * sin llamadas ML por fila). Niveles LOW/MEDIUM/HIGH solo con política aprobada.
+ * HU-01/HU-03: citas programadas del período con sus scores persistidos (sin llamadas ML por
+ * fila). Dos clasificaciones separadas: `riskLevel` operativo solo con política APROBADA (hoy
+ * 409 si se filtra/ordena) y banda EXPERIMENTAL research v2 por modelo, filtrable/ordenable
+ * bajo una sola política vigente (firmada en el cursor para no mezclar políticas).
  */
 export class ListReservationRisks {
   constructor(private readonly deps: ListReservationRisksDependencies) {}
@@ -52,7 +61,21 @@ export class ListReservationRisks {
       throw new InvalidReservationQueryException('UNKNOWN_CLINIC', 'clinicId', 'La sede no existe');
     }
 
-    const sortField = input.sort === 'appointmentAt' ? 'appointmentAt' : 'probabilityNoShow';
+    const evidence = allowedSnapshotEvidence(this.deps.mode);
+    const currentPolicy = await this.deps.scores.currentExperimentalPolicy(
+      input.modelKey,
+      evidence,
+    );
+    const experimentalPolicy: ListExperimentalRiskPolicy | null = currentPolicy
+      ? { ...currentPolicy, modelKey: input.modelKey }
+      : null;
+
+    const sortField =
+      input.sort === 'appointmentAt'
+        ? 'appointmentAt'
+        : input.sort === 'experimentalRisk'
+          ? 'experimentalRisk'
+          : 'probabilityNoShow';
     const signature = [
       input.status,
       input.sort,
@@ -62,6 +85,8 @@ export class ListReservationRisks {
       input.to,
       input.clinicId ?? '-',
       input.riskLevel ?? '-',
+      input.experimentalRiskLevel ?? '-',
+      experimentalPolicy?.policyHash ?? '-',
     ].join('|');
     const after = input.cursor ? decodeReservationCursor(input.cursor, signature) : null;
 
@@ -75,7 +100,9 @@ export class ListReservationRisks {
       sortDirection: input.direction,
       modelKey: input.modelKey,
       probabilityRange,
-      snapshotEvidence: allowedSnapshotEvidence(this.deps.mode),
+      experimentalPolicyHash: experimentalPolicy?.policyHash ?? null,
+      experimentalRiskLevel: input.experimentalRiskLevel,
+      snapshotEvidence: evidence,
       after,
       limit: input.limit,
     });
@@ -85,7 +112,7 @@ export class ListReservationRisks {
       page.hasMore && last
         ? encodeReservationCursor(
             {
-              probability: sortField === 'probabilityNoShow' ? last.sortProbability : undefined,
+              probability: sortField === 'appointmentAt' ? undefined : last.sortProbability,
               appointmentAt: last.reservation.appointmentAt,
               reservationId: last.reservation.reservationId,
             },
@@ -93,8 +120,12 @@ export class ListReservationRisks {
           )
         : null;
 
+    const items = page.rows.map((row) => this.toItem(row, input.modelKey, experimentalPolicy));
+    const operationalUnavailable = !policyAvailable;
+    const experimentalUnavailable = experimentalPolicy === null;
+
     return {
-      items: page.rows.map((row) => this.toItem(row)),
+      items,
       nextCursor,
       limit: input.limit,
       period: { from: input.from, to: input.to, timeZone: LIMA_TIME_ZONE, ...period },
@@ -107,10 +138,15 @@ export class ListReservationRisks {
             ? 'CHRONOLOGICAL'
             : input.sort === 'riskLevel'
               ? 'APPROVED_RISK_POLICY'
-              : 'EXPLORATORY_SCORE_ORDER',
+              : input.sort === 'experimentalRisk'
+                ? 'EXPERIMENTAL_RESEARCH_BAND_ORDER'
+                : 'EXPLORATORY_SCORE_ORDER',
       },
       riskPolicyStatus: this.deps.policy.status,
-      classificationUnavailable: !policyAvailable,
+      classificationUnavailable: operationalUnavailable && experimentalUnavailable,
+      operationalClassificationUnavailable: operationalUnavailable,
+      experimentalClassificationUnavailable: experimentalUnavailable,
+      experimentalRiskPolicy: experimentalPolicy,
       sourceStatus: this.deps.mode,
       predictiveStoreAvailable: page.predictiveStoreAvailable,
     };
@@ -123,8 +159,14 @@ export class ListReservationRisks {
     return band;
   }
 
-  private toItem(row: ReservationListRow): ListReservationRisksItem {
+  private toItem(
+    row: ReservationListRow,
+    modelKey: ListReservationRisksInput['modelKey'],
+    experimentalPolicy: ListExperimentalRiskPolicy | null,
+  ): ListReservationRisksItem {
     const { reservation } = row;
+    const experimentalRisk =
+      row.scores.find((score) => score.modelKey === modelKey)?.experimentalRisk ?? null;
     const stale =
       reservation.status === 'SCHEDULED' &&
       reservation.appointmentAt.getTime() <= this.deps.clock.now().getTime();
@@ -134,6 +176,7 @@ export class ListReservationRisks {
       {
         mode: this.deps.mode,
         servicesTemporalEvidence: this.deps.evidenceSource.servicesTemporalEvidence,
+        snapshotEvidenceSource: this.deps.evidenceSource.snapshotEvidenceSource,
       },
     );
 
@@ -148,6 +191,9 @@ export class ListReservationRisks {
           ? this.deps.policy.classify(score)
           : null,
       })),
+      experimentalRisk,
+      experimentalPolicyCurrent:
+        experimentalRisk !== null && experimentalRisk.policyHash === experimentalPolicy?.policyHash,
     };
   }
 }

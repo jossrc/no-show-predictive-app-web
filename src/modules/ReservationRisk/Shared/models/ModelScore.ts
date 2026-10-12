@@ -1,8 +1,11 @@
 import type { MlModelKey } from '../../../../infrastructure/http/ml/MlFeatureContract.js';
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 import type { RiskLevel } from '../policy/RiskLevelPolicy.js';
+import type { ExperimentalRisk } from './ExperimentalRisk.js';
 
-/** Resultado persistido de UN algoritmo sobre UN snapshot (ml.prediction_model_results). */
+export type ScoringApiVersion = 'v1' | 'v2';
+
+/** Resultado persistido de UN algoritmo sobre UN snapshot (almacén local prediction_model_results). */
 export interface ModelScore {
   readonly resultId: DecimalId;
   readonly predictionRunId: string;
@@ -24,6 +27,12 @@ export interface ModelScore {
   readonly riskLevel: RiskLevel | null;
   readonly riskPolicyVersion: string | null;
   readonly riskPolicyStatus: string;
+  /** v2 = score obtenido con la política research; v1 = inferencia sin banda experimental. */
+  readonly scoringApiVersion: ScoringApiVersion;
+  /** SHA-256 completo del artefacto (v2); null en scores v1 heredados. */
+  readonly modelHashSha256: string | null;
+  /** Banda relativa EXPERIMENTAL de Python v2; null si no hubo política research. */
+  readonly experimentalRisk: ExperimentalRisk | null;
 }
 
 export type NewModelScore = Omit<ModelScore, 'resultId' | 'predictionRunId'>;

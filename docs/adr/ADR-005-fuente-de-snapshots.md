@@ -10,3 +10,8 @@
 - **Consecuencias:** hoy ninguna reserva real es puntuable; la demostración funcional usa datos
   sintéticos. Desbloquearlo exige una captura fechada al reservar (sincronizador/HU-15, fuera de
   Sprint 01). El builder reproduce exactamente el ETL de entrenamiento (prueba de paridad).
+
+- **Actualización 2026-10-11:** los snapshots se persisten en el almacén SQLite local (ADR-006), no en
+  `ml.booking_feature_snapshots`. Auditoría read-only del 2026-10-12: `raw_flow.diary_det` no tiene
+  columnas temporales por línea; 0 de 8.887 reservas FUTURE con evidencia (ver `source_inventory.md`).
+  `SYNTHETIC_DEMO_ONLY` usa proveedores sintéticos versionados en lugar de la BD de prueba.

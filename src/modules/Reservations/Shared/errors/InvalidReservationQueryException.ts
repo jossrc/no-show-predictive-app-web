@@ -2,7 +2,7 @@ import { ValidationException } from '../../../../shared/errors/validation/Valida
 
 export class InvalidReservationQueryException extends ValidationException {
   constructor(
-    code: 'INVALID_PERIOD' | 'INVALID_CURSOR' | 'UNKNOWN_CLINIC',
+    code: 'INVALID_PERIOD' | 'INVALID_CURSOR' | 'UNKNOWN_CLINIC' | 'RANKING_CANDIDATES_EXCEEDED',
     field: string,
     message: string,
   ) {

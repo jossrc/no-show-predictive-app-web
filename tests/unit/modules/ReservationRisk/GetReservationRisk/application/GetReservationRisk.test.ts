@@ -80,6 +80,9 @@ describe('GetReservationRisk (HU-02 lectura sin efectos)', () => {
       riskLevel: null,
       riskPolicyVersion: null,
       riskPolicyStatus: 'pending_validation',
+      scoringApiVersion: 'v1',
+      modelHashSha256: null,
+      experimentalRisk: null,
     });
     assert.equal((await ctx.run()).assessment.status, 'AVAILABLE_EXPLORATORY');
     ctx.clock.set(new Date('2026-11-13T00:00:00Z'));

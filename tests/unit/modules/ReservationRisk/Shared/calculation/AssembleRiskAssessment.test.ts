@@ -27,6 +27,9 @@ function score(modelKey: ModelScore['modelKey'], p: number): ModelScore {
     riskLevel: null,
     riskPolicyVersion: null,
     riskPolicyStatus: 'pending_validation',
+    scoringApiVersion: 'v1',
+    modelHashSha256: null,
+    experimentalRisk: null,
   };
 }
 

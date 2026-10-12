@@ -1,0 +1,17 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml b0e11893 con ML_ENABLE_RESEARCH_RISK=false (reports/risk-policy-closeout-20261011-165943/http_disabled_smoke.json). Sin datos de clientes.",
+  "status": 503,
+  "body": {
+    "error": {
+      "code": "RESEARCH_RISK_POLICY_NOT_READY",
+      "message": "La política de bandas experimentales no está disponible.",
+      "details": [
+        {
+          "field": "experimental_risk",
+          "reason": "disabled"
+        }
+      ]
+    },
+    "request_id": "ed312f3217e544e88a805b2f18cfd3f7"
+  }
+}

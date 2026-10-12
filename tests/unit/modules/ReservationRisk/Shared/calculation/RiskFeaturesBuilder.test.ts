@@ -126,11 +126,17 @@ describe('RiskFeaturesBuilder (19 predictoras as-of booking_creation)', () => {
     const sunday = built(
       build({ appointmentAt: new Date('2026-11-01T15:00:00Z'), appointmentEndAt: null }),
     );
-    assert.equal(sunday.features.appointment_weekday, 7);
+    assert.equal(sunday.features.appointment_weekday, 7, 'ISO como el ETL 14: nunca 7→0');
+    assert.ok(
+      sunday.warnings.includes('WEEKDAY_ABSENT_FROM_TRAINING_DATA'),
+      'domingo fuera de distribución',
+    );
     const monday = built(
       build({ appointmentAt: new Date('2026-11-02T15:00:00Z'), appointmentEndAt: null }),
     );
     assert.equal(monday.features.appointment_weekday, 1);
+    assert.ok(!monday.warnings.includes('WEEKDAY_ABSENT_FROM_TRAINING_DATA'));
+    assert.ok(!saturday.warnings.includes('WEEKDAY_ABSENT_FROM_TRAINING_DATA'));
     // 2027-01-01T04:00Z = jueves 31-dic-2026 23:00 en Lima.
     const newYearEve = built(
       build({ appointmentAt: new Date('2027-01-01T04:00:00Z'), appointmentEndAt: null }),

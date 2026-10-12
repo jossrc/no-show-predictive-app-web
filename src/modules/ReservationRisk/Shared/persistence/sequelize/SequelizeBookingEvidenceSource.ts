@@ -116,6 +116,7 @@ function mapService(row: ServiceRow): EvidenceServiceLine {
 export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
   // diary_det / appointment_services no registran cuándo se creó cada línea.
   readonly servicesTemporalEvidence = 'NONE_CURRENT_REPLICA' as const;
+  readonly snapshotEvidenceSource = 'VERIFIED_BOOKING_SNAPSHOT' as const;
 
   constructor(
     private readonly sequelize: Sequelize,
@@ -174,6 +175,7 @@ export class SequelizeBookingEvidenceSource implements BookingEvidenceSource {
       services: services.map(mapService),
       servicesTemporalEvidence: this.servicesTemporalEvidence,
       sourceIngestionBatchId: facts.ingestion_batch_id,
+      evidenceSource: this.snapshotEvidenceSource,
     };
   }
 }

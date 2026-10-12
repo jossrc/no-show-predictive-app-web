@@ -10,10 +10,10 @@ export function registerOpenApi(app: FastifyInstance): void {
       openapi: '3.1.0',
       info: {
         title: 'DEPI — No-Show Predictive API',
-        version: '1.0.0-sprint01',
+        version: '1.1.0-research-risk-v2',
         summary: 'Backend Fastify — Sprint 01 · Sistema predictivo de inasistencias',
         description:
-          'API principal del sistema web predictivo de inasistencias. Sprint 01: consulta de reservas, probabilidades experimentales de Random Forest y XGBoost, explicaciones SHAP e historial de inasistencias. Las estimaciones no están científicamente validadas para uso operativo.',
+          'API principal del sistema web predictivo de inasistencias: reservas (PostgreSQL de solo lectura), probabilidades experimentales de Random Forest y XGBoost (Python v1/v2), explicaciones SHAP e historial as-of. Dos clasificaciones distintas: (1) riskLevel OPERATIVO, siempre null mientras no exista una política aprobada (riskPolicyStatus=pending_validation; filtrar/ordenar por él ⇒ 409 RISK_POLICY_UNAVAILABLE); (2) experimentalRisk, banda relativa EXPERIMENTAL Bajo/Medio/Alto (exploratorio) publicada por la política research_risk_v1_1 de Python v2 para cada modelo por separado (RESEARCH_PROVISIONAL, approvedBy=null). Las bandas son terciles relativos del score crudo: no son probabilidad de inasistencia ni riesgo clínico, y operationalUseAllowed=false en todo momento. Snapshots y scores se persisten en un almacén SQLite local; la base PostgreSQL nunca se escribe. Todos los ejemplos son sintéticos.',
       },
       servers: [{ url: 'http://127.0.0.1:3000', description: 'Servidor de desarrollo' }],
       tags: [
@@ -34,7 +34,8 @@ export function registerOpenApi(app: FastifyInstance): void {
         },
         {
           name: 'Prediction Models',
-          description: 'Catálogo de Random Forest y XGBoost independientes.',
+          description:
+            'Catálogo de Random Forest y XGBoost independientes y política experimental de bandas (research v2).',
         },
       ],
       components: {

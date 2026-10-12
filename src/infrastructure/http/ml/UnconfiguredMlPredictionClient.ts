@@ -13,4 +13,7 @@ export class UnconfiguredMlPredictionClient implements MlPredictionClient {
   explain = () => notConfigured('explain');
   batch = () => notConfigured('batch');
   ready = () => notConfigured('ready');
+  getResearchPolicy = () => notConfigured('research_policy');
+  predictResearch = () => notConfigured('research_predict');
+  compareResearch = () => notConfigured('research_compare');
 }

@@ -1,6 +1,30 @@
-# Sprint 01 — Base de datos (almacén predictivo `ml`)
+# Sprint 01 — Base de datos (almacén predictivo)
 
-## Decisión
+> **Vigente desde 2026-10-11 (ADR-006):** PostgreSQL es fuente de **solo lectura** y el almacén
+> predictivo runtime es **SQLite local** (sección siguiente). El diseño del schema `ml` de abajo se
+> conserva como referencia para un futuro adaptador autorizado; **no está aplicado ni conectado**.
+
+## Almacén runtime: SQLite local (`node:sqlite`)
+
+- Archivo por modo: `.local/predictive-store/read_only_existing_schedule.sqlite` y
+  `.local/predictive-store/synthetic_demo_only.sqlite` (o `PREDICTIVE_STORE_SQLITE_PATH`). Directorio
+  0700, archivo/WAL 0600, ignorado por Git. `store_meta` liga el archivo a su modo: abrirlo con otro modo
+  falla (`PERSISTENCE_UNAVAILABLE`/`STORE_MODE_MISMATCH`).
+- Pragmas: WAL, `synchronous=FULL`, `foreign_keys`, `busy_timeout`, `trusted_schema=OFF`, modo defensivo.
+- Migraciones locales versionadas e idempotentes (`schema_migrations` con SHA-256; un checksum distinto
+  aborta): `src/modules/ReservationRisk/Shared/persistence/sqlite/PredictiveStoreSchema.ts` (v`001`).
+- Tablas `STRICT`: `booking_feature_snapshots` (UNIQUE reserva+hash, `prediction_at < appointment_at`),
+  `prediction_runs` (`scoring_api_version`), `prediction_model_results` (score float64 sin redondeo,
+  identidad completa, `model_hash_sha256`, banda experimental completa o ausente, `risk_level` solo con
+  política aprobada, `operational_use_allowed=0`, UNIQUE snapshot+modelo+versión+`research_policy_key`).
+  Triggers sin UPDATE/DELETE en las tres. Índices por reserva/modelo/fecha y por modelo/política.
+- Transacciones `BEGIN IMMEDIATE` síncronas y cortas; la llamada a Python ocurre fuera. Single-flight
+  en proceso + UNIQUE: 6 POST concurrentes ⇒ 1 inferencia, 1 run, 2 resultados (probado con Python real).
+- Operación: `npm run store:status` (versión, integridad `quick_check`, conteos) y `npm run store:backup`
+  (`VACUUM INTO` en `.local/predictive-store/backups/`, 0600). No hay limpieza de la fuente.
+- PII mínima: las 19 features (incluye edad y sexo) se guardan para reproducir SHAP; no se exponen por API.
+
+## Diseño de referencia del schema `ml` (PostgreSQL, no aplicado)
 
 Se usa el schema **`ml`**, que ya existía vacío (creado por `docker/postgres/init/01-create-schemas.sql`
 con el comentario «Modelos, snapshots y predicciones»). Nada se crea en `raw_flow`/`analytics`.
@@ -38,7 +62,7 @@ indispensables para reproducir SHAP con el mismo snapshot; se versionan y no se 
    1 run y 2 resultados. No se promete «exactly-once» distribuido: un crash entre Python y el commit
    puede provocar una nueva inferencia, deduplicada por la clave única.
 
-## Ejecución (NO aplicada en la BD real por esta entrega)
+## Ejecución (BLOQUEADA: requiere `ML_SCHEMA_WRITE_AUTHORIZED=true` y autorización expresa)
 
 ```bash
 npm run migrate:app -- --dry-run      # muestra base destino, aplicadas y pendientes; no escribe
@@ -50,9 +74,9 @@ npm run migrate:app -- --down --confirm-database=depi_noshow_test
 El runner (`AppMigrationRunner`) guarda versión + SHA-256 en `ml.app_schema_migrations`, aborta si
 el checksum de una migración aplicada cambió y nunca se ejecuta al arrancar el servidor.
 `up`, idempotencia, constraints, inmutabilidad y `down` se probaron en `depi_noshow_test`
-(`tests/integration/database/postgres/AppMigrations.test.ts`). Sin migrar, el listado y la lectura
-de riesgo siguen funcionando sin scores (`predictiveStoreAvailable=false`); `POST` responde 503
-`PERSISTENCE_UNAVAILABLE`.
+(`tests/integration/database/postgres/AppMigrations.test.ts`). En runtime ya no se usa: el listado
+lee la fuente sin `ml.*` y los scores salen del SQLite local. El adaptador `ml` falla cerrado ante
+scores v2 (`EXPERIMENTAL_RISK_NOT_SUPPORTED`) porque la migración 001 no tiene columnas research.
 
 ## Permisos mínimos recomendados (documentados, no ejecutados)
 

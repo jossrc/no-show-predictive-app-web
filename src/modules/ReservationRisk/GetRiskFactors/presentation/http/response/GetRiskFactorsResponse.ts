@@ -1,3 +1,5 @@
+import type { ExperimentalRiskSummary } from '../../../../../Reservations/Shared/models/ReservationScoreSummary.js';
+
 export interface RiskFactorBody {
   featureName: string;
   label: string;
@@ -31,6 +33,7 @@ export interface GetRiskFactorsResponse {
       available: boolean;
       sameModelIdentity: boolean;
       probabilityNoShow: number | null;
+      experimentalRisk: ExperimentalRiskSummary | null;
     };
     explanation: {
       method: 'tree_shap';

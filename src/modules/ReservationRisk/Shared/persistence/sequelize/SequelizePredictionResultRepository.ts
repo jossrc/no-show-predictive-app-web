@@ -9,6 +9,7 @@ import type {
   PredictionResultRepository,
   SavePredictionRunOutcome,
 } from '../PredictionResultRepository.js';
+import { PersistenceUnavailableException } from '../../../../../infrastructure/database/errors/PersistenceUnavailableException.js';
 import { toPersistenceException } from './PredictiveStoreErrors.js';
 
 const RESULT_COLUMNS = `
@@ -103,9 +104,20 @@ function mapRow(row: ResultRow): ModelScore {
     riskLevel: row.risk_level,
     riskPolicyVersion: row.risk_policy_version,
     riskPolicyStatus: row.risk_policy_status,
+    // La migración 001 del schema ml no tiene columnas de la política research v2.
+    scoringApiVersion: 'v1',
+    modelHashSha256: null,
+    experimentalRisk: null,
   };
 }
 
+/**
+ * Adaptador PostgreSQL del schema `ml` (migración 001). PRESERVADO Y AISLADO: el runtime actual
+ * usa el almacén SQLite local porque PostgreSQL es fuente de solo lectura (ADR-006); este
+ * adaptador solo se conectaría con autorización expresa de escritura y una conexión separada.
+ * Su esquema no admite la banda experimental v2: guardar un score v2 falla cerrado en lugar
+ * de perder la clasificación.
+ */
 export class SequelizePredictionResultRepository implements PredictionResultRepository {
   constructor(private readonly sequelize: Sequelize) {}
 
@@ -125,14 +137,16 @@ export class SequelizePredictionResultRepository implements PredictionResultRepo
     snapshotId: string,
     identities: readonly ModelIdentity[],
   ): Promise<ModelScore[]> {
-    if (identities.length === 0) return [];
+    // Este esquema solo contiene scores v1 (sin política research).
+    const v1Identities = identities.filter((identity) => identity.researchPolicyHash === null);
+    if (v1Identities.length === 0) return [];
 
     try {
       const rows = await this.sequelize.query<ResultRow>(BY_IDENTITIES_SQL, {
         bind: [
           snapshotId,
-          identities.map((identity) => identity.modelKey),
-          identities.map((identity) => identity.modelVersion),
+          v1Identities.map((identity) => identity.modelKey),
+          v1Identities.map((identity) => identity.modelVersion),
         ],
         type: QueryTypes.SELECT,
       });
@@ -146,6 +160,12 @@ export class SequelizePredictionResultRepository implements PredictionResultRepo
     run: NewPredictionRun,
     scores: readonly NewModelScore[],
   ): Promise<SavePredictionRunOutcome> {
+    if (scores.some((score) => score.experimentalRisk !== null)) {
+      throw new PersistenceUnavailableException({
+        operation: 'SavePredictionRun',
+        reason: 'EXPERIMENTAL_RISK_NOT_SUPPORTED',
+      });
+    }
     let createdRunUid: string | null = null;
 
     try {
@@ -212,7 +232,11 @@ export class SequelizePredictionResultRepository implements PredictionResultRepo
     const winners = snapshotId
       ? await this.findByIdentities(
           snapshotId,
-          scores.map((score) => ({ modelKey: score.modelKey, modelVersion: score.modelVersion })),
+          scores.map((score) => ({
+            modelKey: score.modelKey,
+            modelVersion: score.modelVersion,
+            researchPolicyHash: null,
+          })),
         )
       : [];
 

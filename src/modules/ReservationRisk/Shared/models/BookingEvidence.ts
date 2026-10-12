@@ -1,3 +1,4 @@
+import type { SnapshotEvidenceSource } from '../../../../shared/data/DataSourceMode.js';
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 import type { ReservationStatus } from '../../../Reservations/Shared/models/ReservationStatus.js';
 import type { ScheduledServiceLine } from './VerifiedBookingSnapshot.js';
@@ -35,4 +36,6 @@ export interface BookingEvidence {
    */
   readonly servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' | 'CAPTURED_AT_BOOKING';
   readonly sourceIngestionBatchId: string | null;
+  /** Procedencia: réplica real (VERIFIED_BOOKING_SNAPSHOT si se acredita) o fixture sintética. */
+  readonly evidenceSource: SnapshotEvidenceSource;
 }

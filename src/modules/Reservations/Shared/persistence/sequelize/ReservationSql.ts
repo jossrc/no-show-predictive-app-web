@@ -1,9 +1,10 @@
-import type { ReservationListCriteria } from '../ReservationRepository.js';
+import type { ReservationSourceCriteria } from '../ReservationSource.js';
 
 /**
- * SQL parametrizado de reservas. Esquemas, tablas, columnas y ORDER BY son literales fijos
- * (whitelist): ningún valor del usuario se interpola en el texto SQL.
- * Columnas verificadas en information_schema (ver docs/sprint-01/source_inventory.md).
+ * SQL parametrizado de reservas sobre la FUENTE (raw_flow/analytics, solo lectura). Esquemas,
+ * tablas, columnas y ORDER BY son literales fijos (whitelist): ningún valor del usuario se
+ * interpola en el texto SQL. No referencia el schema ml: los scores viven en el almacén local
+ * (ADR-006). Columnas verificadas en information_schema (docs/sprint-01/source_inventory.md).
  */
 export interface BuiltQuery {
   readonly sql: string;
@@ -35,42 +36,6 @@ const RESCHEDULE_EXISTS = `
      WHERE h."DiaryGDelayedID" = o.appointment_id AND h."DiaryGDelayed" = -1
    )) AS has_reschedule_event`;
 
-/** Último score por modelo (DISTINCT ON) de snapshots con la evidencia admitida en el modo activo. */
-function scoresLateral(evidenceParam: string, reservationExpr: string): string {
-  return `
-  LEFT JOIN LATERAL (
-    SELECT jsonb_agg(
-             jsonb_build_object(
-               'modelKey', latest.model_key,
-               'modelVersion', latest.model_version,
-               'modelHash', latest.model_hash,
-               'probabilityNoShow', latest.probability_no_show,
-               'scoredAt', latest.scored_at,
-               'predictionRunId', latest.run_uid
-             ) ORDER BY latest.model_key
-           ) AS items
-    FROM (
-      SELECT DISTINCT ON (r.model_key)
-             r.model_key, r.model_version, r.model_hash, r.probability_no_show, r.scored_at,
-             pr.run_uid::text AS run_uid
-      FROM ml.prediction_model_results r
-      JOIN ml.booking_feature_snapshots s
-        ON s.snapshot_id = r.snapshot_id AND s.evidence_source = ${evidenceParam}
-      JOIN ml.prediction_runs pr ON pr.run_id = r.run_id
-      WHERE r.reservation_id = ${reservationExpr}
-      ORDER BY r.model_key, r.scored_at DESC, r.result_id DESC
-    ) latest
-  ) scores ON true`;
-}
-
-function snapshotExists(evidenceParam: string, reservationExpr: string): string {
-  return `
-  EXISTS (
-    SELECT 1 FROM ml.booking_feature_snapshots bs
-    WHERE bs.reservation_id = ${reservationExpr} AND bs.evidence_source = ${evidenceParam}
-  ) AS has_usable_snapshot`;
-}
-
 class BindList {
   readonly values: unknown[] = [];
 
@@ -80,47 +45,12 @@ class BindList {
   }
 }
 
-function orderBy(criteria: ReservationListCriteria, prefix: { at: string; id: string; p: string }) {
-  const direction = criteria.sortDirection === 'desc' ? 'DESC' : 'ASC';
-
-  if (criteria.sortField === 'probabilityNoShow') {
-    return `${prefix.p} ${direction} NULLS LAST, ${prefix.at} ASC, ${prefix.id} ASC`;
-  }
-  return `${prefix.at} ${direction}, ${prefix.id} ${direction}`;
-}
-
-function keysetCondition(criteria: ReservationListCriteria, bind: BindList): string | null {
-  const after = criteria.after;
-  if (!after) return null;
-
-  const at = bind.add(after.appointmentAt);
-  const id = bind.add(after.reservationId);
-  const tieBreakAfter = `(o.appointment_at, o.appointment_id) > (${at}::timestamptz, ${id}::bigint)`;
-
-  if (criteria.sortField === 'appointmentAt') {
-    const comparator = criteria.sortDirection === 'desc' ? '<' : '>';
-    return `(o.appointment_at, o.appointment_id) ${comparator} (${at}::timestamptz, ${id}::bigint)`;
-  }
-
-  if (after.probability === null || after.probability === undefined) {
-    return `(sel.probability_no_show IS NULL AND ${tieBreakAfter})`;
-  }
-
-  const p = bind.add(after.probability);
-  const comparator = criteria.sortDirection === 'desc' ? '<' : '>';
-  return `(sel.probability_no_show IS NULL
-        OR sel.probability_no_show ${comparator} ${p}::double precision
-        OR (sel.probability_no_show = ${p}::double precision AND ${tieBreakAfter}))`;
-}
-
 /**
  * Una sola consulta paginada (sin N+1): la página se resuelve primero con LIMIT y solo después
- * se adjuntan scores/eventos a esas filas.
+ * se adjuntan los eventos de reprogramación a esas filas. Orden cronológico estable
+ * (appointment_at, appointment_id) en la dirección pedida, con keyset sobre ese mismo par.
  */
-export function buildReservationListQuery(
-  criteria: ReservationListCriteria,
-  predictiveStoreAvailable: boolean,
-): BuiltQuery {
+export function buildReservationListQuery(criteria: ReservationSourceCriteria): BuiltQuery {
   const bind = new BindList();
   const where: string[] = [
     criteria.status === 'SCHEDULED'
@@ -136,104 +66,49 @@ export function buildReservationListQuery(
   if (criteria.clinicScope.kind === 'CLINICS') {
     where.push(`o.clinic_id = ANY(${bind.add([...criteria.clinicScope.clinicIds])}::integer[])`);
   }
+  if (criteria.onlyIds !== null) {
+    where.push(`o.appointment_id = ANY(${bind.add([...criteria.onlyIds])}::bigint[])`);
+  }
+  if (criteria.excludeIds !== null && criteria.excludeIds.length > 0) {
+    where.push(`NOT (o.appointment_id = ANY(${bind.add([...criteria.excludeIds])}::bigint[]))`);
+  }
 
-  // Solo se enlaza si se usa: PostgreSQL rechaza parámetros enviados y no referenciados.
-  const evidence = predictiveStoreAvailable ? bind.add(criteria.snapshotEvidence) : '';
-  const sortLateral = predictiveStoreAvailable
-    ? `LEFT JOIN LATERAL (
-        SELECT r.probability_no_show
-        FROM ml.prediction_model_results r
-        JOIN ml.booking_feature_snapshots s
-          ON s.snapshot_id = r.snapshot_id AND s.evidence_source = ${evidence}
-        WHERE r.reservation_id = o.appointment_id AND r.model_key = ${bind.add(criteria.modelKey)}
-        ORDER BY r.scored_at DESC, r.result_id DESC
-        LIMIT 1
-      ) sel ON true`
-    : `LEFT JOIN LATERAL (SELECT NULL::double precision AS probability_no_show) sel ON true`;
-
-  if (criteria.probabilityRange) {
+  const descending = criteria.direction === 'desc';
+  if (criteria.after) {
+    const at = bind.add(criteria.after.appointmentAt);
+    const id = bind.add(criteria.after.reservationId);
     where.push(
-      `sel.probability_no_show >= ${bind.add(criteria.probabilityRange.minInclusive)}::double precision`,
-      `sel.probability_no_show < ${bind.add(criteria.probabilityRange.maxExclusive)}::double precision`,
+      `(o.appointment_at, o.appointment_id) ${descending ? '<' : '>'} (${at}::timestamptz, ${id}::bigint)`,
     );
   }
 
-  const keyset = keysetCondition(criteria, bind);
-  if (keyset) where.push(keyset);
-
+  const direction = descending ? 'DESC' : 'ASC';
   const limit = bind.add(criteria.limit + 1);
-  const innerOrder = orderBy(criteria, {
-    at: 'o.appointment_at',
-    id: 'o.appointment_id',
-    p: 'sel.probability_no_show',
-  });
-  const outerOrder = orderBy(criteria, {
-    at: 'page.appointment_at',
-    id: 'page.appointment_id',
-    p: 'page.sort_probability',
-  });
-
   const sql = `
 WITH page AS (
   SELECT o.appointment_id, o.client_id, o.clinic_id, o.appointment_at, o.created_at_source,
-         o.outcome, o.classification_detail, o.classification_cutoff_at,
-         sel.probability_no_show AS sort_probability
+         o.outcome, o.classification_detail, o.classification_cutoff_at
   FROM analytics.appointment_outcomes o
-  ${sortLateral}
   WHERE ${where.join('\n    AND ')}
-  ORDER BY ${innerOrder}
+  ORDER BY o.appointment_at ${direction}, o.appointment_id ${direction}
   LIMIT ${limit}
 )
 SELECT ${RESERVATION_COLUMNS.replaceAll(' o.', ' page.')},
-  page.sort_probability AS sort_probability,
-  ${RESCHEDULE_EXISTS.replaceAll('o.appointment_id', 'page.appointment_id')},
-  ${
-    predictiveStoreAvailable
-      ? `${snapshotExists(evidence, 'page.appointment_id')},
-  COALESCE(scores.items, '[]'::jsonb) AS scores`
-      : `false AS has_usable_snapshot,
-  '[]'::jsonb AS scores`
-  }
+  ${RESCHEDULE_EXISTS.replaceAll('o.appointment_id', 'page.appointment_id')}
 FROM page
-${predictiveStoreAvailable ? scoresLateral(evidence, 'page.appointment_id') : ''}
-ORDER BY ${outerOrder}`;
+ORDER BY page.appointment_at ${direction}, page.appointment_id ${direction}`;
 
   return { sql, bind: bind.values };
 }
 
-export function buildReservationByIdQuery(
-  reservationId: string,
-  options: { includeScores: boolean; evidence?: string },
-): BuiltQuery {
-  const bind = new BindList();
-  const id = bind.add(reservationId);
-
-  if (!options.includeScores) {
-    return {
-      sql: `
-SELECT ${RESERVATION_COLUMNS},
-  NULL::double precision AS sort_probability,
-  ${RESCHEDULE_EXISTS},
-  false AS has_usable_snapshot,
-  '[]'::jsonb AS scores
-FROM analytics.appointment_outcomes o
-WHERE o.appointment_id = ${id}::bigint`,
-      bind: bind.values,
-    };
-  }
-
-  const evidence = bind.add(options.evidence);
+export function buildReservationByIdQuery(reservationId: string): BuiltQuery {
   return {
     sql: `
 SELECT ${RESERVATION_COLUMNS},
-  NULL::double precision AS sort_probability,
-  ${RESCHEDULE_EXISTS},
-  ${snapshotExists(evidence, 'o.appointment_id')},
-  COALESCE(scores.items, '[]'::jsonb) AS scores
+  ${RESCHEDULE_EXISTS}
 FROM analytics.appointment_outcomes o
-${scoresLateral(evidence, 'o.appointment_id')}
-WHERE o.appointment_id = ${id}::bigint`,
-    bind: bind.values,
+WHERE o.appointment_id = $1::bigint`,
+    bind: [reservationId],
   };
 }
 

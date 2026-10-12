@@ -3,11 +3,10 @@ import { after, before, describe, it } from 'node:test';
 import type pg from 'pg';
 import { QueryTypes } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
-import { PredictiveStoreProbe } from '../../../../src/infrastructure/database/sequelize/postgres/PredictiveStoreProbe.js';
 import { runInReadOnlySnapshot } from '../../../../src/infrastructure/database/sequelize/postgres/RunInReadOnlySnapshot.js';
-import { SequelizePredictionResultRepository } from '../../../../src/modules/ReservationRisk/Shared/persistence/sequelize/SequelizePredictionResultRepository.js';
-import { SequelizeBookingSnapshotRepository } from '../../../../src/modules/ReservationRisk/Shared/persistence/sequelize/SequelizeBookingSnapshotRepository.js';
+import { SqlitePredictiveStore } from '../../../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
 import type { ReservationListCriteria } from '../../../../src/modules/Reservations/Shared/persistence/ReservationRepository.js';
+import { ScoredReservationRepository } from '../../../../src/modules/Reservations/Shared/persistence/ScoredReservationRepository.js';
 import { SequelizeReservationRepository } from '../../../../src/modules/Reservations/Shared/persistence/sequelize/SequelizeReservationRepository.js';
 import { limaDayRangeToInstants } from '../../../../src/shared/time/LimaTime.js';
 import { IDS, seedReservationScenario } from '../../../fixtures/database/ReservationScenario.js';
@@ -39,6 +38,8 @@ function criteria(overrides: Partial<ReservationListCriteria> = {}): Reservation
     sortDirection: 'asc',
     modelKey: 'random_forest_full_v1',
     probabilityRange: null,
+    experimentalPolicyHash: null,
+    experimentalRiskLevel: null,
     snapshotEvidence: 'SYNTHETIC_DEMO_ONLY',
     after: null,
     limit: 25,
@@ -47,11 +48,11 @@ function criteria(overrides: Partial<ReservationListCriteria> = {}): Reservation
 }
 
 async function scoreReservation(
-  sequelize: Sequelize,
+  store: SqlitePredictiveStore,
   reservationId: string,
   probability: number,
 ): Promise<void> {
-  const snapshots = new SequelizeBookingSnapshotRepository(sequelize);
+  const snapshots = store.snapshots;
   const stored = makeStoredSnapshot({
     verified: makeVerifiedSnapshot({ reservationId, evidenceSource: 'SYNTHETIC_DEMO_ONLY' }),
     evidenceSource: 'SYNTHETIC_DEMO_ONLY',
@@ -62,7 +63,7 @@ async function scoreReservation(
     evidence: {},
     sourceIngestionBatchId: null,
   });
-  await new SequelizePredictionResultRepository(sequelize).saveRun(
+  await store.results.saveRun(
     {
       runUid: crypto.randomUUID(),
       snapshotId: snapshot.snapshotId,
@@ -73,6 +74,7 @@ async function scoreReservation(
       runRequestedAt: new Date(),
       completedAt: new Date(),
       mlLatencyMs: 1,
+      scoringApiVersion: 'v1',
     },
     [
       {
@@ -92,15 +94,23 @@ async function scoreReservation(
         riskLevel: null,
         riskPolicyVersion: null,
         riskPolicyStatus: 'pending_validation',
+        scoringApiVersion: 'v1',
+        modelHashSha256: null,
+        experimentalRisk: null,
       },
     ],
   );
 }
 
+/**
+ * Fuente PostgreSQL (BD de PRUEBA) compuesta con el almacén SQLite local, igual que en runtime:
+ * filtros/orden de negocio en SQL de solo lectura, scores desde el almacén local.
+ */
 describe('SequelizeReservationRepository (SQL real, BD de prueba)', { skip: skip ?? false }, () => {
   let sequelize: Sequelize;
   let client: pg.Client;
-  let repository: SequelizeReservationRepository;
+  let repository: ScoredReservationRepository;
+  const store = SqlitePredictiveStore.open({ path: ':memory:', mode: 'SYNTHETIC_DEMO_ONLY' });
   const statements: string[] = [];
 
   before(async () => {
@@ -108,13 +118,13 @@ describe('SequelizeReservationRepository (SQL real, BD de prueba)', { skip: skip
     client = await connectPg();
     await seedReservationScenario(client);
     sequelize = createTestSequelize({ logging: (sql) => void statements.push(sql) });
-    repository = new SequelizeReservationRepository(
-      sequelize,
-      new PredictiveStoreProbe(sequelize, 0),
-      5000,
+    repository = new ScoredReservationRepository(
+      new SequelizeReservationRepository(sequelize, 5000),
+      store.scores,
     );
   });
   after(async () => {
+    store.close();
     await sequelize?.close();
     await client?.end();
   });
@@ -182,9 +192,9 @@ describe('SequelizeReservationRepository (SQL real, BD de prueba)', { skip: skip
   });
 
   it('orden por probabilidad NULLS LAST con desempate estable y keyset sin duplicados ni saltos', async () => {
-    await scoreReservation(sequelize, IDS.r1, 0.3);
-    await scoreReservation(sequelize, IDS.r2, 0.3);
-    await scoreReservation(sequelize, IDS.unsafe, 0.9);
+    await scoreReservation(store, IDS.r1, 0.3);
+    await scoreReservation(store, IDS.r2, 0.3);
+    await scoreReservation(store, IDS.unsafe, 0.9);
     const order: string[] = [];
     let after: ReservationListCriteria['after'] = null;
     for (let page = 0; page < 5; page += 1) {
@@ -263,14 +273,21 @@ describe('SequelizeReservationRepository (SQL real, BD de prueba)', { skip: skip
     );
   });
 
-  it('sin migraciones del schema ml el listado sigue funcionando sin scores', async () => {
+  it('la fuente no depende del schema ml: sin él, listado y orden por score siguen funcionando', async () => {
     await client.query(
       'DROP TABLE ml.prediction_model_results, ml.prediction_runs, ml.booking_feature_snapshots',
     );
-    const page = await repository.list(criteria({ sortField: 'probabilityNoShow' }));
-    assert.equal(page.predictiveStoreAvailable, false);
+    statements.length = 0;
+    const page = await repository.list(
+      criteria({ sortField: 'probabilityNoShow', sortDirection: 'desc' }),
+    );
+    assert.equal(page.predictiveStoreAvailable, true);
     assert.equal(page.rows.length, 5);
-    assert.ok(page.rows.every((r) => r.scores.length === 0 && r.sortProbability === null));
+    assert.equal(page.rows[0]?.reservation.reservationId, IDS.unsafe, 'scores del almacén local');
+    assert.ok(
+      statements.every((sql) => !/\bml\./.test(sql)),
+      'ninguna sentencia toca ml.*',
+    );
   });
 });
 reportSkipped('SequelizeReservationRepository', skip);

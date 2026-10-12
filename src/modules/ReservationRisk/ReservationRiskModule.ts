@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { CachedMlModelCatalog } from '../../infrastructure/http/ml/CachedMlModelCatalog.js';
+import type { CachedResearchPolicyCatalog } from '../../infrastructure/http/ml/CachedResearchPolicyCatalog.js';
 import type { MlPredictionClient } from '../../infrastructure/http/ml/MlPredictionClient.js';
 import type { DataSourceMode } from '../../shared/data/DataSourceMode.js';
 import type { Clock } from '../../shared/time/Clock.js';
 import type { ClientHistoryRepository } from '../ClientHistory/Shared/persistence/ClientHistoryRepository.js';
 import type { ReservationRepository } from '../Reservations/Shared/persistence/ReservationRepository.js';
+import type { ReservationScoreReader } from '../Reservations/Shared/persistence/ReservationScoreReader.js';
 import { GetReservationRisk } from './GetReservationRisk/application/GetReservationRisk.js';
 import { GetReservationRiskHandler } from './GetReservationRisk/presentation/http/handler/GetReservationRiskHandler.js';
 import { registerGetReservationRiskRoute } from './GetReservationRisk/presentation/http/route/GetReservationRiskRoute.js';
@@ -29,9 +31,11 @@ export interface ReservationRiskModuleOptions {
   history: ClientHistoryRepository;
   snapshots: BookingSnapshotRepository;
   results: PredictionResultRepository;
+  scores: ReservationScoreReader;
   evidenceSource: BookingEvidenceSource;
   ml: MlPredictionClient;
   modelCatalog: CachedMlModelCatalog;
+  research: { readonly enabled: boolean; readonly catalog: CachedResearchPolicyCatalog };
   policy: RiskLevelPolicy;
   mode: DataSourceMode;
   clock: Clock;
@@ -52,6 +56,7 @@ export function createReservationRiskModule(
       reservations: options.reservations,
       policy: options.policy,
       evidenceSource: options.evidenceSource,
+      scores: options.scores,
       mode: options.mode,
       clock: options.clock,
     });
@@ -72,6 +77,7 @@ export function createReservationRiskModule(
       results: options.results,
       ml: options.ml,
       modelCatalog: options.modelCatalog,
+      research: options.research,
       policy: options.policy,
       mode: options.mode,
       clock: options.clock,

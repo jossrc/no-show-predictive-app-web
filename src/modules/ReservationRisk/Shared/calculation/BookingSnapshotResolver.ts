@@ -24,7 +24,8 @@ export type BookingSnapshotResolution =
 /**
  * Localiza la foto de reserva utilizable:
  * 1) snapshot inmutable ya persistido con la evidencia admitida por el modo activo;
- * 2) (solo READ_ONLY_EXISTING_SCHEDULE) evidencia de la réplica, si demuestra el estado al reservar;
+ * 2) evidencia de la fuente del MISMO modo (réplica real si demuestra el estado al reservar, o
+ *    fixture sintética versionada en SYNTHETIC_DEMO_ONLY); una fuente de otro modo se rechaza;
  * 3) en otro caso NOT_SCORABLE con motivos. Nunca reconstruye con datos que pudieron cambiar.
  */
 export class BookingSnapshotResolver {
@@ -59,13 +60,17 @@ export class BookingSnapshotResolver {
     const stored = await this.findStored(reservation);
     if (stored) return { kind: 'STORED', snapshot: stored };
 
-    if (this.mode === 'SYNTHETIC_DEMO_ONLY') {
+    const allowed = allowedSnapshotEvidence(this.mode);
+    if (this.evidenceSource.snapshotEvidenceSource !== allowed) {
       return { kind: 'NOT_SCORABLE', reasons: [notScorableReason('NO_USABLE_SNAPSHOT_IN_MODE')] };
     }
 
     const evidence = await this.evidenceSource.load(reservation.reservationId);
     if (!evidence) {
       return { kind: 'NOT_SCORABLE', reasons: [notScorableReason('RESERVATION_NOT_SCHEDULED')] };
+    }
+    if (evidence.evidenceSource !== allowed) {
+      return { kind: 'NOT_SCORABLE', reasons: [notScorableReason('NO_USABLE_SNAPSHOT_IN_MODE')] };
     }
 
     const assessment = assessBookingEvidence(evidence);

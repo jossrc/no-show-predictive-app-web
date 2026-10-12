@@ -1,16 +1,13 @@
 import { QueryTypes } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import { SourceDataUnavailableException } from '../../../../../infrastructure/database/errors/SourceDataUnavailableException.js';
-import type { PredictiveStoreProbe } from '../../../../../infrastructure/database/sequelize/postgres/PredictiveStoreProbe.js';
 import { runInReadOnlySnapshot } from '../../../../../infrastructure/database/sequelize/postgres/RunInReadOnlySnapshot.js';
-import type { SnapshotEvidenceSource } from '../../../../../shared/data/DataSourceMode.js';
 import type { Reservation } from '../../models/Reservation.js';
-import type { ReservationWithScores } from '../../models/ReservationScoreSummary.js';
 import type {
-  ReservationListCriteria,
-  ReservationListPage,
-  ReservationRepository,
-} from '../ReservationRepository.js';
+  ReservationSource,
+  ReservationSourceCriteria,
+  ReservationSourcePage,
+} from '../ReservationSource.js';
 import { mapReservationRow, type ReservationRow } from './ReservationRowMapper.js';
 import {
   buildReservationByIdQuery,
@@ -19,50 +16,33 @@ import {
   type BuiltQuery,
 } from './ReservationSql.js';
 
-export class SequelizeReservationRepository implements ReservationRepository {
+/**
+ * Fuente de reservas sobre PostgreSQL raw_flow/analytics: toda lectura en REPEATABLE READ READ
+ * ONLY con statement_timeout. No lee ni escribe el schema ml (funciona aunque no esté migrado).
+ */
+export class SequelizeReservationRepository implements ReservationSource {
   constructor(
     private readonly sequelize: Sequelize,
-    private readonly predictiveStore: PredictiveStoreProbe,
     private readonly statementTimeoutMs: number,
   ) {}
 
-  async list(criteria: ReservationListCriteria): Promise<ReservationListPage> {
+  async list(criteria: ReservationSourceCriteria): Promise<ReservationSourcePage> {
+    if (criteria.onlyIds !== null && criteria.onlyIds.length === 0) {
+      return { rows: [], hasMore: false };
+    }
     return this.guard('ListScheduledReservations', async () => {
-      const predictiveStoreAvailable = await this.predictiveStore.isReady();
-      const rows = await this.select(buildReservationListQuery(criteria, predictiveStoreAvailable));
+      const rows = await this.select(buildReservationListQuery(criteria));
       const mapped = rows.flatMap((row) => {
-        const item = mapReservationRow(row);
-        return item ? [item] : [];
+        const reservation = mapReservationRow(row);
+        return reservation ? [reservation] : [];
       });
-
-      return {
-        rows: mapped.slice(0, criteria.limit),
-        hasMore: rows.length > criteria.limit,
-        predictiveStoreAvailable,
-      };
+      return { rows: mapped.slice(0, criteria.limit), hasMore: rows.length > criteria.limit };
     });
   }
 
   async findById(reservationId: string): Promise<Reservation | null> {
     return this.guard('FindReservation', async () => {
-      const rows = await this.select(
-        buildReservationByIdQuery(reservationId, { includeScores: false }),
-      );
-      const first = rows[0];
-      return first ? (mapReservationRow(first)?.reservation ?? null) : null;
-    });
-  }
-
-  async findWithScores(
-    reservationId: string,
-    snapshotEvidence: SnapshotEvidenceSource,
-  ): Promise<ReservationWithScores | null> {
-    return this.guard('FindReservationWithScores', async () => {
-      const includeScores = await this.predictiveStore.isReady();
-      const rows = await this.select(
-        buildReservationByIdQuery(reservationId, { includeScores, evidence: snapshotEvidence }),
-      );
-      const first = rows[0];
+      const [first] = await this.select(buildReservationByIdQuery(reservationId));
       return first ? mapReservationRow(first) : null;
     });
   }

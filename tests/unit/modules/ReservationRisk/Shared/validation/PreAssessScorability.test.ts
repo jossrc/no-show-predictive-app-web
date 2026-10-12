@@ -6,6 +6,7 @@ import { makeReservation } from '../../../../../helpers/MakeSyntheticReservation
 const readOnly = {
   mode: 'READ_ONLY_EXISTING_SCHEDULE' as const,
   servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' as const,
+  snapshotEvidenceSource: 'VERIFIED_BOOKING_SNAPSHOT' as const,
 };
 
 describe('PreAssessScorability (estado por fila del listado, sin consultas extra)', () => {
@@ -46,7 +47,7 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
     );
   });
 
-  it('modo sintético sin snapshot ⇒ NO_USABLE_SNAPSHOT_IN_MODE; captura fechada ⇒ NOT_SCORED', () => {
+  it('fuente de otro modo ⇒ NO_USABLE_SNAPSHOT_IN_MODE; captura fechada ⇒ NOT_SCORED', () => {
     const synthetic = preAssessScorability(
       makeReservation(),
       { hasScores: false, hasUsableSnapshot: false },
@@ -62,5 +63,32 @@ describe('PreAssessScorability (estado por fila del listado, sin consultas extra
       { ...readOnly, servicesTemporalEvidence: 'CAPTURED_AT_BOOKING' },
     );
     assert.equal(captured.availability, 'NOT_SCORED');
+
+    // Proveedor sintético local (fixtures con captura sintética) en su propio modo ⇒ evaluable.
+    const syntheticSource = preAssessScorability(
+      makeReservation(),
+      { hasScores: false, hasUsableSnapshot: false },
+      {
+        mode: 'SYNTHETIC_DEMO_ONLY',
+        servicesTemporalEvidence: 'CAPTURED_AT_BOOKING',
+        snapshotEvidenceSource: 'SYNTHETIC_DEMO_ONLY',
+      },
+    );
+    assert.equal(syntheticSource.availability, 'NOT_SCORED');
+
+    // Fuente sintética en modo real: nunca se mezcla.
+    const mixed = preAssessScorability(
+      makeReservation(),
+      { hasScores: false, hasUsableSnapshot: false },
+      {
+        ...readOnly,
+        servicesTemporalEvidence: 'CAPTURED_AT_BOOKING',
+        snapshotEvidenceSource: 'SYNTHETIC_DEMO_ONLY',
+      },
+    );
+    assert.deepEqual(
+      mixed.reasons.map((r) => r.code),
+      ['NO_USABLE_SNAPSHOT_IN_MODE'],
+    );
   });
 });

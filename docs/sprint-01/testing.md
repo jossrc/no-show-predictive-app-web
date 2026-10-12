@@ -83,3 +83,21 @@ preexistente. Los repositorios Sequelize solo se cubren con `test:coverage:all`.
 Ninguna nueva: `node:test`, `tsx`, `ajv` (ya en dependencias) para el OpenAPI, `pg`/Sequelize
 existentes, Docker para la BD de prueba. Se descartaron Vitest, Testcontainers y c8 por no ser
 necesarios.
+
+## Cierre técnico 2026-10-11 (resultados reales)
+
+| Comando                                            | Resultado                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| `npm run check`                                    | exit 0 — 276 tests, 274 pass, 0 fail, 2 skip (paridad opt-in)            |
+| `npm run test:unit` / `test:contract` / `test:e2e` | 218/218 · 13/15 (+2 opt-in) · 43/43                                      |
+| `test:contract` con `ML_CONTRACT_SOURCE_DIR/PATH`  | 15/15 (SHA v1+v2 = repo Python vivo)                                     |
+| `test:integration` con Python real                 | 21 tests: 13 pass, 0 fail, 8 skip (BD PostgreSQL de prueba no levantada) |
+| `npm run test:coverage`                            | 97,82 % líneas, 92,95 % ramas (umbrales 85/80)                           |
+
+Suites nuevas: `ReadOnlySqlGuard`, `MlResearchContractValidator`, `MlResearchClient` (HTTP loopback),
+`CachedResearchPolicyCatalog`, `MlOpenApiV2Contract`, `SqlitePredictiveStore` (reinicio, permisos, modo,
+concurrencia, CHECK/triggers), `ScoredReservationRepository` (ranking/paginación), `RequestReservationPredictionResearch`,
+E2E `ExperimentalRiskSyntheticFlow` (composition root real sin PostgreSQL + doble Python estricto por
+predictoras), integración real `RealMlResearchService` y `SyntheticLocalRealMlFlow`. Las integraciones con la
+BD de prueba (`depi_noshow_test`) se adaptaron al almacén SQLite y quedan SKIP mientras no se ejecute
+`npm run test:db:up` (no se levantó en esta ejecución para no depender de Docker).

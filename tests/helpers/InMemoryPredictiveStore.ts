@@ -3,6 +3,7 @@ import type {
   BookingFeatureSnapshot,
   NewBookingFeatureSnapshot,
 } from '../../src/modules/ReservationRisk/Shared/models/BookingFeatureSnapshot.js';
+import { summarizeExperimentalRisk } from '../../src/modules/ReservationRisk/Shared/models/ExperimentalRisk.js';
 import type {
   ModelScore,
   NewModelScore,
@@ -14,10 +15,24 @@ import type {
   PredictionResultRepository,
   SavePredictionRunOutcome,
 } from '../../src/modules/ReservationRisk/Shared/persistence/PredictionResultRepository.js';
+import type { ReservationScoreSummary } from '../../src/modules/Reservations/Shared/models/ReservationScoreSummary.js';
+import type {
+  ExperimentalPolicyIdentity,
+  RankedScore,
+  ReservationScoreReader,
+  ScoreRankingCriteria,
+} from '../../src/modules/Reservations/Shared/persistence/ReservationScoreReader.js';
 
-/** Almacén predictivo en memoria con las mismas reglas UNIQUE/inmutabilidad que el schema ml. */
+const policyKey = (score: { experimentalRisk: { policyHash: string } | null }) =>
+  score.experimentalRisk?.policyHash ?? '';
+
+/**
+ * Almacén predictivo en memoria con las mismas reglas UNIQUE/inmutabilidad que el SQLite local
+ * (incluida la identidad por política research). Las pruebas de integración SQLite verifican la
+ * misma semántica sobre el adaptador real.
+ */
 export class InMemoryPredictiveStore
-  implements BookingSnapshotRepository, PredictionResultRepository
+  implements BookingSnapshotRepository, PredictionResultRepository, ReservationScoreReader
 {
   readonly snapshots: BookingFeatureSnapshot[] = [];
   readonly runs: NewPredictionRun[] = [];
@@ -68,7 +83,12 @@ export class InMemoryPredictiveStore
     return this.results.filter(
       (r) =>
         r.snapshotId === snapshotId &&
-        identities.some((id) => id.modelKey === r.modelKey && id.modelVersion === r.modelVersion),
+        identities.some(
+          (id) =>
+            id.modelKey === r.modelKey &&
+            id.modelVersion === r.modelVersion &&
+            (id.researchPolicyHash ?? '') === policyKey(r),
+        ),
     );
   }
 
@@ -88,7 +108,8 @@ export class InMemoryPredictiveStore
           (r) =>
             r.snapshotId === score.snapshotId &&
             r.modelKey === score.modelKey &&
-            r.modelVersion === score.modelVersion,
+            r.modelVersion === score.modelVersion &&
+            policyKey(r) === policyKey(score),
         ),
     );
 
@@ -110,7 +131,11 @@ export class InMemoryPredictiveStore
       createdRunUid,
       scores: await this.findByIdentities(
         snapshotId,
-        scores.map((s) => ({ modelKey: s.modelKey, modelVersion: s.modelVersion })),
+        scores.map((s) => ({
+          modelKey: s.modelKey,
+          modelVersion: s.modelVersion,
+          researchPolicyHash: s.experimentalRisk?.policyHash ?? null,
+        })),
       ),
     };
   }
@@ -136,5 +161,92 @@ export class InMemoryPredictiveStore
     return this.snapshots.some(
       (s) => s.reservationId === reservationId && s.evidenceSource === evidence,
     );
+  }
+
+  // --- ReservationScoreReader (misma semántica que SqliteReservationScoreReader) ---
+
+  async isAvailable(): Promise<boolean> {
+    return true;
+  }
+
+  async latestScores(
+    reservationIds: readonly string[],
+    evidence: SnapshotEvidenceSource,
+  ): Promise<ReadonlyMap<string, readonly ReservationScoreSummary[]>> {
+    return new Map(
+      reservationIds.map((id) => [
+        id,
+        this.latestScoresForReservation(id, evidence).map((s) => ({
+          modelKey: s.modelKey,
+          modelVersion: s.modelVersion,
+          modelHash: s.modelHash,
+          probabilityNoShow: s.probabilityNoShow,
+          scoredAt: s.scoredAt,
+          predictionRunId: s.predictionRunId,
+          experimentalRisk: s.experimentalRisk
+            ? summarizeExperimentalRisk(s.experimentalRisk)
+            : null,
+        })),
+      ]),
+    );
+  }
+
+  async reservationsWithUsableSnapshot(
+    reservationIds: readonly string[],
+    evidence: SnapshotEvidenceSource,
+  ): Promise<ReadonlySet<string>> {
+    return new Set(reservationIds.filter((id) => this.hasSnapshot(id, evidence)));
+  }
+
+  async rankLatest(criteria: ScoreRankingCriteria): Promise<readonly RankedScore[]> {
+    const reservationIds = new Set(
+      this.snapshots
+        .filter((s) => s.evidenceSource === criteria.evidence)
+        .map((s) => s.reservationId),
+    );
+    return [...reservationIds].flatMap((reservationId) => {
+      const latest = this.latestScoresForReservation(reservationId, criteria.evidence).find(
+        (s) => s.modelKey === criteria.modelKey,
+      );
+      if (!latest) return [];
+      const p = latest.probabilityNoShow;
+      const range = criteria.probabilityRange;
+      if (range && !(p >= range.minInclusive && p < range.maxExclusive)) return [];
+      if (
+        criteria.experimentalPolicyHash !== null &&
+        policyKey(latest) !== criteria.experimentalPolicyHash
+      ) {
+        return [];
+      }
+      if (
+        criteria.experimentalRiskLevel !== null &&
+        latest.experimentalRisk?.level !== criteria.experimentalRiskLevel
+      ) {
+        return [];
+      }
+      return [{ reservationId, probability: p }];
+    });
+  }
+
+  async currentExperimentalPolicy(
+    modelKey: ModelScore['modelKey'],
+    evidence: SnapshotEvidenceSource,
+  ): Promise<ExperimentalPolicyIdentity | null> {
+    const snapshotIds = new Set(
+      this.snapshots.filter((s) => s.evidenceSource === evidence).map((s) => s.snapshotId),
+    );
+    const latest = this.results
+      .filter((r) => r.modelKey === modelKey && r.experimentalRisk && snapshotIds.has(r.snapshotId))
+      .sort(
+        (a, b) =>
+          b.scoredAt.getTime() - a.scoredAt.getTime() || Number(b.resultId) - Number(a.resultId),
+      )[0];
+    return latest?.experimentalRisk
+      ? {
+          policyId: latest.experimentalRisk.policyId,
+          policyVersion: latest.experimentalRisk.policyVersion,
+          policyHash: latest.experimentalRisk.policyHash,
+        }
+      : null;
   }
 }

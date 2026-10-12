@@ -1,5 +1,6 @@
 import type { MlModelKey } from '../../../../infrastructure/http/ml/MlFeatureContract.js';
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
+import type { ScoringApiVersion } from './ModelScore.js';
 
 export type PredictionMode = 'single' | 'compare';
 
@@ -14,4 +15,5 @@ export interface NewPredictionRun {
   readonly runRequestedAt: Date;
   readonly completedAt: Date;
   readonly mlLatencyMs: number;
+  readonly scoringApiVersion: ScoringApiVersion;
 }

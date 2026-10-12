@@ -76,7 +76,7 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
         bodyAreaProductId: line.bodyAreaProductId,
         isMedicalEvaluation: line.isMedicalEvaluation,
       })),
-      evidenceSource: 'VERIFIED_BOOKING_SNAPSHOT',
+      evidenceSource: evidence.evidenceSource,
     },
   };
 }

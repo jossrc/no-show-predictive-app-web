@@ -5,6 +5,7 @@ import type { PredictiveModulesDependencies } from '../../src/app/PredictiveModu
 import type { ExceptionReporter } from '../../src/app/http/errors/reporting/ExceptionReporter.js';
 import type { SequelizeHealthCheck } from '../../src/infrastructure/database/sequelize/SequelizeHealthCheck.js';
 import { CachedMlModelCatalog } from '../../src/infrastructure/http/ml/CachedMlModelCatalog.js';
+import { CachedResearchPolicyCatalog } from '../../src/infrastructure/http/ml/CachedResearchPolicyCatalog.js';
 import { PendingValidationRiskLevelPolicy } from '../../src/modules/ReservationRisk/Shared/policy/PendingValidationRiskLevelPolicy.js';
 import type { RiskLevelPolicy } from '../../src/modules/ReservationRisk/Shared/policy/RiskLevelPolicy.js';
 import type { DataSourceMode } from '../../src/shared/data/DataSourceMode.js';
@@ -38,6 +39,11 @@ export interface BuildTestAppOptions {
   readonly mode?: DataSourceMode;
   readonly evidence?: FakeBookingEvidenceSource;
   readonly predictiveApi?: boolean;
+  /**
+   * Política research v2. Por defecto deshabilitada para conservar la cobertura del camino v1
+   * de las pruebas existentes; las pruebas de banda experimental la habilitan explícitamente.
+   */
+  readonly research?: boolean;
   readonly exceptionReporters?: readonly ExceptionReporter[];
   readonly overrides?: Partial<PredictiveModulesDependencies>;
 }
@@ -61,9 +67,14 @@ export function buildTestApp(options: BuildTestAppOptions = {}): TestAppContext 
     history,
     snapshots: store,
     results: store,
+    scores: store,
     evidenceSource: evidence,
     ml,
     modelCatalog: new CachedMlModelCatalog(ml, 60_000),
+    research: {
+      enabled: options.research ?? false,
+      catalog: new CachedResearchPolicyCatalog(ml, { ttlMs: 60_000, expectedPolicyHashes: [] }),
+    },
     policy: options.policy ?? new PendingValidationRiskLevelPolicy(),
     mode: options.mode ?? 'READ_ONLY_EXISTING_SCHEDULE',
     clock,

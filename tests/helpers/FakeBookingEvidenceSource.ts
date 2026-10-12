@@ -1,5 +1,6 @@
 import type { BookingEvidence } from '../../src/modules/ReservationRisk/Shared/models/BookingEvidence.js';
 import type { BookingEvidenceSource } from '../../src/modules/ReservationRisk/Shared/persistence/BookingEvidenceSource.js';
+import type { SnapshotEvidenceSource } from '../../src/shared/data/DataSourceMode.js';
 
 export class FakeBookingEvidenceSource implements BookingEvidenceSource {
   readonly evidence = new Map<string, BookingEvidence>();
@@ -7,6 +8,7 @@ export class FakeBookingEvidenceSource implements BookingEvidenceSource {
 
   constructor(
     readonly servicesTemporalEvidence: BookingEvidenceSource['servicesTemporalEvidence'] = 'NONE_CURRENT_REPLICA',
+    readonly snapshotEvidenceSource: SnapshotEvidenceSource = 'VERIFIED_BOOKING_SNAPSHOT',
   ) {}
 
   add(evidence: BookingEvidence): void {

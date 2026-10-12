@@ -9,12 +9,14 @@ import { registerInternalApiKeyGuard } from './http/security/InternalApiKeyGuard
 import type {
   MlHealthRegistration,
   PredictiveApiRegistration,
+  PredictiveStoreHealthRegistration,
 } from './PredictiveModulesDependencies.js';
 
 export interface RegisterModulesOptions {
   postgresHealthCheck: SequelizeHealthCheck;
   mysqlHealthCheck: SequelizeHealthCheck | null;
   mlHealth?: MlHealthRegistration | undefined;
+  predictiveStore?: PredictiveStoreHealthRegistration | null | undefined;
   /** null/undefined: rutas de negocio no registradas (sin credencial o deshabilitadas). */
   predictiveApi?: PredictiveApiRegistration | null | undefined;
 }
@@ -27,6 +29,7 @@ export function registerModules(app: FastifyInstance, options: RegisterModulesOp
           postgresHealthCheck: options.postgresHealthCheck,
           mysqlHealthCheck: options.mysqlHealthCheck,
           mlHealth: options.mlHealth,
+          predictiveStore: options.predictiveStore,
         }),
       );
 
@@ -55,7 +58,11 @@ export function registerModules(app: FastifyInstance, options: RegisterModulesOp
             }),
           );
           await secured.register(
-            createPredictionModelsModule({ modelCatalog: deps.modelCatalog, policy: deps.policy }),
+            createPredictionModelsModule({
+              modelCatalog: deps.modelCatalog,
+              policy: deps.policy,
+              research: deps.research,
+            }),
           );
         },
         { prefix: '/v1' },

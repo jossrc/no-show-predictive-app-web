@@ -23,6 +23,10 @@ export interface RiskAssessment {
   readonly comparison: { readonly absoluteProbabilityDifference: number } | null;
   readonly riskPolicyStatus: RiskPolicyStatus;
   readonly riskPolicyVersion: string | null;
+  /** Algún modelo tiene banda EXPERIMENTAL research v2 persistida (no es riesgo operativo). */
+  readonly experimentalClassificationAvailable: boolean;
+  /** Algún modelo tiene nivel por política APROBADA (hoy nunca). */
+  readonly operationalClassificationAvailable: boolean;
 }
 
 const MODEL_ORDER = new Map<string, number>(ML_MODEL_KEYS.map((key, index) => [key, index]));
@@ -72,5 +76,7 @@ export function assembleRiskAssessment(params: {
         : null,
     riskPolicyStatus: params.policy.status,
     riskPolicyVersion: params.policy.policyVersion,
+    experimentalClassificationAvailable: models.some((model) => model.experimentalRisk !== null),
+    operationalClassificationAvailable: models.some((model) => model.policyRiskLevel !== null),
   };
 }

@@ -77,3 +77,31 @@ cada línea). Por eso, en modo `READ_ONLY_EXISTING_SCHEDULE` todas las reservas 
 `raw_flow` refleja la ingesta del 2026-10-07 (último `DiaryGCreated` 16:47 Lima);
 `appointment_outcomes` se clasificó el 2026-10-08. La clasificación `FUTURE` es relativa a ese
 corte: las respuestas exponen `classificationCutoffAt` y `sourceFreshness`.
+
+## Auditoría read-only 2026-10-12 (cierre técnico)
+
+Sesión `default_transaction_read_only=on`, `REPEATABLE READ READ ONLY`, solo `SELECT` agregados
+(sin filas personales). Réplica: último `DiaryGCreated` 2026-10-07 16:47 Lima; outcomes 2026-10-08.
+Detalle: `reports/node-closeout/phase-4-readonly-audit.json` y `phase-4-eligibility-runtime.json`.
+
+| Vía de evidencia auditada                 | Resultado                                                                            | ¿Acredita la foto al reservar?                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `raw_flow.diary_det` (líneas)             | 0 columnas temporales (solo IDs y `_ingested_at` del lote)                           | No                                                                                    |
+| `DiaryGStamp = DiaryGCreated`             | 0 de 8.887 FUTURE                                                                    | No (y no certifica líneas)                                                            |
+| `DiaryGGroupID` / `DiaryGMultID`          | 0 FUTURE con valor no nulo/0                                                         | No aplica                                                                             |
+| `DiaryGDelayed`/`DiaryGDelayedID`         | 259.045 copias; 24 enlaces rotos; 1.522 copias apuntan a FUTURE                      | Solo identifica reprogramaciones                                                      |
+| `analytics.appointment_events`            | solo `RESCHEDULED` (259.045), sin `CREATED`, sin metadatos                           | No                                                                                    |
+| `analytics.appointment_services.metadata` | sin claves                                                                           | No                                                                                    |
+| Orden de `DiaryID` vs creación            | 8.512 FUTURE con líneas: 0 con línea insertada tras el día siguiente (marca de agua) | No: no detecta borrados ni ediciones; monotonicidad no documentada (solo diagnóstico) |
+
+Embudo con el **pipeline runtime de Node** (8.887 FUTURE_PENDING; 1.648 con cita ya pasada a la
+fecha de auditoría): `SCHEDULED_SERVICES_NOT_POINT_IN_TIME` 8.887, `CATALOG_NOT_POINT_IN_TIME` 4.995,
+`RESCHEDULED_WITHOUT_ORIGINAL_SNAPSHOT` 1.062, `CLIENT_ATTRIBUTES_NOT_POINT_IN_TIME` 1.048; 3.059
+fallan **solo** por la captura fechada de servicios (2.589 aún futuras). **Elegibles con prueba: 0.**
+(El conteo de catálogo difiere del 10-10 (4.803) porque ahora se exige también la marca de zona y
+área corporal resueltas.)
+
+Propuesta futura (no implementada, no se inventa integración FLOWww): capturar al crear la reserva un
+registro fechado e inmutable de las líneas, versión de catálogo y atributos del cliente desde una
+fuente autorizada; un `BookingEvidenceSource` que la lea podrá declarar `CAPTURED_AT_BOOKING` +
+`VERIFIED_BOOKING_SNAPSHOT` por registro, y el resto del pipeline ya lo admite (probado en unit/e2e).

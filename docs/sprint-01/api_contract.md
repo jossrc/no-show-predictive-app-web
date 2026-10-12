@@ -22,9 +22,11 @@ La superficie documentada depende de la composición real: las rutas predictivas
 registradas si están deshabilitadas o falta la credencial; Health ML depende de su registro.
 Health MySQL permanece registrado incluso sin conexión configurada (200 con `status=disabled`).
 Los tipos anulables y los códigos HTTP se conservan. Los ejemplos de petición son sintéticos;
-las probabilidades siguen siendo exploratorias, con `riskLevel=null` y política pendiente de
-validación. La integración queda pendiente de revisión manual posterior, sin pruebas automatizadas,
-typecheck, compilación ni verificación HTTP en esta sesión.
+las probabilidades siguen siendo exploratorias, con `riskLevel=null` (operativo) y política
+pendiente de validación; la banda experimental va aparte en `experimentalRisk`. Verificado el
+2026-10-11 con `npm run dev` real: `/docs` 200 y `/docs/openapi.json` con 13 rutas (incluye
+`/api/v1/ml/research-risk-policy` y `/api/v1/health/predictive-store`, y el parámetro
+`experimentalRiskLevel`).
 
 ## Autenticación provisional
 
@@ -127,3 +129,78 @@ genérico), `UpstreamRateLimited`→429, `UpstreamContract`→502, `UpstreamTime
 
 Los números son ilustrativos. `percentageNoShow = 100·probabilityNoShow` solo para visualizar; la
 probabilidad original no se redondea. Un `null` de probabilidad significa «no evaluada», nunca 0.
+
+## Actualización 2026-10-11 — banda EXPERIMENTAL research v2 (aditivo, sin romper clientes)
+
+Todos los campos existentes se conservan con su significado. `riskLevel` sigue siendo el riesgo
+**operativo** y permanece `null`; la banda experimental se expone en campos **nuevos**.
+
+| Endpoint                                               | Cambio aditivo                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/ml/research-risk-policy` (nuevo)          | `{nodeResearchRiskEnabled, available, status, reason, classificationBasis, approvedRiskPolicyStatus, validationStatus, operationalUseAllowed:false, labels, notice, policies[]}`; cada política: modelo, SHA-256, `policyId/Version/Hash`, `lowUpperThreshold`, `highLowerThreshold`, `boundaryRule`, `method`, `meaning`, ventana de desarrollo, `developmentRows`, ECE, `warnings`, `approvedBy:null`. 200 también si UNAVAILABLE (con `reason`); 503/502/504 si Python no responde. |
+| `GET /api/v1/health/predictive-store` (nuevo, público) | `{service, status, message, driver:'sqlite', schemaVersion, dataSourceMode, durable, sourceDatabaseWritable:false}` (503 si `status=error`).                                                                                                                                                                                                                                                                                                                                           |
+| `GET /api/v1/ml/models`                                | `experimentalRiskPolicy{status, available, reason, classificationBasis, operationalUseAllowed:false, policies[{modelKey, policyId, policyVersion, policyHash}]}`; un fallo del catálogo v2 no oculta los modelos.                                                                                                                                                                                                                                                                      |
+| `POST …/predictions`                                   | Con `ML_RESEARCH_RISK_ENABLED=true` usa `/internal/v2`; cada `models[]` trae `experimentalRisk` (objeto completo), `modelHashSha256`, `scoringApiVersion:'v2'`. Política no disponible ⇒ **503 `RESEARCH_RISK_POLICY_NOT_READY`** con `details:{field:'experimental_risk', reason}`; respuesta v2 incoherente con el catálogo ⇒ 502 sin persistir. Idempotente por snapshot+modelo+versión+política.                                                                                   |
+| `GET …/risk` y cuerpo del POST                         | Raíz: `operationalClassificationUnavailable`, `experimentalClassificationUnavailable`, `classificationBasis` (`RESEARCH_PROVISIONAL`/null), `experimentalRiskNotice`. `classificationUnavailable` = sin clasificación operativa **ni** experimental. Por modelo: `experimentalRisk` o `null` + `experimentalRiskUnavailableReason:'SCORED_WITHOUT_RESEARCH_POLICY'`.                                                                                                                   |
+| `GET /api/v1/reservations`                             | Query `experimentalRiskLevel=LOW                                                                                                                                                                                                                                                                                                                                                                                                                                                       | MEDIUM | HIGH`y`sort=experimentalRisk`(por el`modelKey`elegido). Raíz:`experimentalRiskPolicy`(política vigente usada, firmada en el cursor) o`null`, `operationalClassificationUnavailable`, `experimentalClassificationUnavailable`; `sort.semantics='EXPERIMENTAL_RESEARCH_BAND_ORDER'`. Item `risk`: `experimentalRisk`del modelo elegido,`experimentalPolicyCurrent`, ambos `…Unavailable`; cada `probabilities[]`trae`experimentalRisk`compacto.`riskLevel=…`/`sort=riskLevel`siguen ⇒ 409. Ranking > 50 000 reservas puntuadas por modelo ⇒ 422`RANKING_CANDIDATES_EXCEEDED`. |
+| `GET /api/v1/reservations/:id`                         | `scores[].experimentalRisk` compacto.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `GET …/risk/factors`                                   | `persistedScore.experimentalRisk` (banda guardada; SHAP v1 no la recalcula).                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+### Semántica para la UI (Next.js) — handoff
+
+- Mostrar la banda como **«Bajo/Medio/Alto (exploratorio)»** usando `experimentalRisk.label`, siempre
+  junto al modelo (`modelKey`) y con el aviso `experimentalRiskNotice` / `experimentalRiskPolicy.notice`.
+  Nunca derivar una banda común de RF y XGB, ni usar 0.5, ni calcular bandas en el cliente.
+- `riskLevel` debe seguir interpretándose como «sin semáforo operativo aprobado». No hay alias: la UI
+  no debe mapear `experimentalRisk` a `riskLevel`.
+- Estados: `NOT_SCORED` ⇒ ofrecer la acción explícita POST; `NOT_SCORABLE` ⇒ mostrar `reasons[]` (sin
+  score sustituto); 503 `RESEARCH_RISK_POLICY_NOT_READY` ⇒ «bandas experimentales no disponibles»
+  (no mostrar LOW). `experimentalPolicyCurrent=false` ⇒ la banda es de otra versión de política.
+- Filtros: `experimentalRiskLevel` + `modelKey`; paginación solo con `pagination.nextCursor` (un
+  cursor de otra combinación de filtros/modelo/política ⇒ 422 `INVALID_CURSOR`).
+- `operationalUseAllowed=false`: la UI no debe disparar acciones automáticas (recordatorios,
+  bloqueos, sobreventa) a partir de la banda.
+
+### Ejemplo real sintético (`SYNTHETIC_DEMO_ONLY`, Python v2 real, reserva 900000000101005)
+
+Entrada sintética que reproduce `depi-noshow-ml/examples/prediction_compare.json`. Extracto de
+`GET /api/v1/reservations/900000000101005/risk` → `data.models[0]` (RF):
+
+```json
+{
+  "modelKey": "random_forest_full_v1",
+  "modelVersion": "random_forest_full_v1:4e3c86a17005",
+  "modelHash": "4e3c86a17005",
+  "modelHashSha256": "4e3c86a170056146cf82a2cc109ae9051b81845608dbd58aae11e43d97492e08",
+  "scoringApiVersion": "v2",
+  "probabilityNoShow": 0.6976400433344135,
+  "percentageNoShow": 69.76400433344135,
+  "operationalUseAllowed": false,
+  "riskLevel": null,
+  "experimentalRisk": {
+    "level": "HIGH",
+    "label": "Alto (exploratorio)",
+    "status": "RESEARCH_PROVISIONAL",
+    "classificationBasis": "RESEARCH_PROVISIONAL",
+    "policyId": "random_forest_full_v1_tertiles_202604_202605",
+    "policyVersion": "research_risk_v1_1",
+    "policyHash": "1d58ce962e899b758275f7191244225e8c970cf2db9661ffcb21be9b63a4ce74",
+    "lowUpperThreshold": 0.302192334412,
+    "highLowerThreshold": 0.460052607619,
+    "boundaryRule": "LOW:p<t_low;MEDIUM:t_low<=p<t_high;HIGH:p>=t_high",
+    "meaning": "relative_score_band_not_validated_absolute_risk",
+    "scoreSpace": "raw_probability_no_show",
+    "warnings": [
+      "Relative raw-score bands, not validated absolute risks or cancellation probabilities.",
+      "…"
+    ],
+    "approvedBy": null,
+    "operationalUseAllowed": false
+  },
+  "experimentalRiskUnavailableReason": null
+}
+```
+
+XGB del mismo snapshot: `0.9159286618232727`, `HIGH`, política `208c706d…7032`; diferencia descriptiva
+`0.21828861848885917` (sin ganador ni ensemble). Ejemplo completo (riesgo, listado filtrado y
+política) en `reports/node-closeout/example-api-synthetic.json` (local, no versionado).

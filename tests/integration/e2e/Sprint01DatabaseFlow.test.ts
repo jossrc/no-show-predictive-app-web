@@ -6,7 +6,12 @@ import pino from 'pino';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Sequelize } from 'sequelize-typescript';
 import { buildApp } from '../../../src/app/BuildApp.js';
-import { createPredictiveDependencies } from '../../../src/app/CreatePredictiveDependencies.js';
+import { mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { SqlitePredictiveStore } from '../../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { pgTestDbDependencies } from '../../helpers/PgTestDbDependencies.js';
 import { EnvironmentSchema } from '../../../src/config/environment/EnvironmentSchema.js';
 import { createPredictiveConfig } from '../../../src/config/PredictiveConfig.js';
 import type { DataSourceMode } from '../../../src/shared/data/DataSourceMode.js';
@@ -40,6 +45,7 @@ function buildDatabaseApp(
   sequelize: Sequelize,
   ml: FakePredictionClient,
   mode: DataSourceMode,
+  store: SqlitePredictiveStore,
 ): FastifyInstance {
   const config = createPredictiveConfig(
     EnvironmentSchema.parse({
@@ -56,7 +62,7 @@ function buildDatabaseApp(
       internalApiKeySha256: sha256Hex(TEST_INTERNAL_API_KEY),
       // Reloj fijo posterior a los eventos sintéticos: current_known determinista.
       dependencies: {
-        ...createPredictiveDependencies(config, sequelize, ml),
+        ...pgTestDbDependencies(config, sequelize, ml, store),
         clock: new FixedClock(new Date('2027-01-15T00:00:00Z')),
       },
     },
@@ -92,7 +98,11 @@ describe(
 
     it('READ_ONLY_EXISTING_SCHEDULE: la réplica no demuestra snapshots ⇒ listado NOT_SCORABLE, POST 409, cero escrituras', async () => {
       const ml = new FakePredictionClient();
-      const app = buildDatabaseApp(sequelize, ml, 'READ_ONLY_EXISTING_SCHEDULE');
+      const store = SqlitePredictiveStore.open({
+        path: ':memory:',
+        mode: 'READ_ONLY_EXISTING_SCHEDULE',
+      });
+      const app = buildDatabaseApp(sequelize, ml, 'READ_ONLY_EXISTING_SCHEDULE', store);
       const list = await app.inject({
         method: 'GET',
         url: '/api/v1/reservations?from=2026-11-01&to=2026-11-30',
@@ -125,10 +135,13 @@ describe(
     });
 
     it('SYNTHETIC_DEMO_ONLY: listado → POST compare → riesgo → factores → historial, con persistencia auditable', async () => {
-      await captureSyntheticSnapshots(sequelize, [IDS.r1, IDS.r2]);
+      const file = path.join(mkdtempSync(path.join(os.tmpdir(), 'nsp-flow-')), 'store.sqlite');
+      const store = SqlitePredictiveStore.open({ path: file, mode: 'SYNTHETIC_DEMO_ONLY' });
+      await captureSyntheticSnapshots(sequelize, [IDS.r1, IDS.r2], store.snapshots);
+      const local = new DatabaseSync(file, { readOnly: true });
       const ml = new FakePredictionClient();
       ml.setProbability('random_forest_full_v1', 0.31);
-      const app = buildDatabaseApp(sequelize, ml, 'SYNTHETIC_DEMO_ONLY');
+      const app = buildDatabaseApp(sequelize, ml, 'SYNTHETIC_DEMO_ONLY', store);
       const get = (url: string) => app.inject({ method: 'GET', url, headers: AUTH_HEADERS });
 
       const created = await app.inject({
@@ -147,30 +160,31 @@ describe(
       assert.equal(replay.statusCode, 200);
       assert.equal(ml.callsOf('compare').length, 1);
 
-      const runs = await client.query(
-        `SELECT count(*)::int AS n, max(request_id) AS rid FROM ml.prediction_runs`,
-      );
-      assert.equal(runs.rows[0].n, 1);
-      const persisted = await client.query(
-        `SELECT model_key, probability_no_show, risk_level, operational_use_allowed, prediction_at FROM ml.prediction_model_results ORDER BY model_key`,
-      );
+      // Persistencia auditable en el almacén LOCAL; el schema ml de PostgreSQL no se toca.
+      assert.equal(local.prepare('SELECT count(*) AS n FROM prediction_runs').get()?.n, 1);
+      const persisted = local
+        .prepare(
+          'SELECT model_key, probability_no_show, risk_level, operational_use_allowed, prediction_at FROM prediction_model_results ORDER BY model_key',
+        )
+        .all();
       assert.deepEqual(
-        persisted.rows.map((r) => [
+        persisted.map((r) => [
           r.model_key,
           r.probability_no_show,
           r.risk_level,
           r.operational_use_allowed,
         ]),
         [
-          ['random_forest_full_v1', 0.31, null, false],
-          ['xgboost_full_v1', 0.9159286618232727, null, false],
+          ['random_forest_full_v1', 0.31, null, 0],
+          ['xgboost_full_v1', 0.9159286618232727, null, 0],
         ],
       );
       assert.equal(
-        persisted.rows[0].prediction_at.toISOString(),
+        persisted[0]?.prediction_at,
         '2026-10-20T16:00:00.000Z',
         'prediction_at = creación de la reserva',
       );
+      assert.equal(await countRows(client, 'ml.prediction_runs'), 0);
 
       const sorted = (
         await get(
@@ -204,13 +218,12 @@ describe(
       const sentFeatures = (
         ml.callsOf('explain')[0]!.request as { features: Record<string, unknown> }
       ).features;
-      const stored = await client.query(
-        `SELECT features FROM ml.booking_feature_snapshots WHERE reservation_id = $1`,
-        [IDS.r2],
-      );
+      const stored = local
+        .prepare('SELECT features_json FROM booking_feature_snapshots WHERE reservation_id = ?')
+        .get(IDS.r2);
       assert.deepEqual(
         sentFeatures,
-        stored.rows[0].features,
+        JSON.parse(String(stored?.features_json)),
         'SHAP usa exactamente el snapshot persistido',
       );
 
@@ -223,6 +236,7 @@ describe(
         await get(`/api/v1/reservations/${IDS.r1}/client-history?historicalAsOf=current_known`)
       ).json().data;
       assert.deepEqual([current.previousAttended, current.previousNoShow], [2, 2]);
+      local.close();
       await app.close();
     });
   },

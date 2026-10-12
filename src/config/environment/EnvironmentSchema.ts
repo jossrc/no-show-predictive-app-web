@@ -190,6 +190,26 @@ const mlServiceSchema = {
   ML_CIRCUIT_FAILURE_THRESHOLD: positiveInt('ML_CIRCUIT_FAILURE_THRESHOLD', 5, 100),
   ML_CIRCUIT_COOLDOWN_MS: positiveInt('ML_CIRCUIT_COOLDOWN_MS', 30000, 600000),
   ML_MODEL_CATALOG_TTL_MS: positiveInt('ML_MODEL_CATALOG_TTL_MS', 60000, 3600000),
+  /** Bandas experimentales v2 (research_risk_v1_1). true ⇒ POST exige política v2 disponible. */
+  ML_RESEARCH_RISK_ENABLED: envBoolean(true),
+  /** Allowlist opcional de hashes de política research aceptados (SHA-256 separados por coma). */
+  ML_RESEARCH_EXPECTED_POLICY_HASHES: optionalText.pipe(
+    z
+      .string()
+      .regex(/^[0-9a-f]{64}(,[0-9a-f]{64})*$/, {
+        error:
+          'ML_RESEARCH_EXPECTED_POLICY_HASHES debe ser una lista de SHA-256 separados por coma',
+      })
+      .optional(),
+  ),
+};
+
+const predictiveStoreSchema = {
+  /**
+   * Archivo SQLite del almacén predictivo local. Por defecto `.local/predictive-store/<modo>.sqlite`
+   * (ignorado por Git). `:memory:` solo para pruebas (no durable).
+   */
+  PREDICTIVE_STORE_SQLITE_PATH: optionalText,
 };
 
 export const EnvironmentSchema = z.object({
@@ -199,6 +219,7 @@ export const EnvironmentSchema = z.object({
   ...serverSchema,
   ...predictiveApiSchema,
   ...mlServiceSchema,
+  ...predictiveStoreSchema,
 });
 
 export type EnvironmentVariables = z.infer<typeof EnvironmentSchema>;

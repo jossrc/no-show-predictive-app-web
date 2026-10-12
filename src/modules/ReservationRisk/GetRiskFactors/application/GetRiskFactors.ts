@@ -4,6 +4,7 @@ import { loadAccessibleReservation } from '../../Shared/access/LoadAccessibleRes
 import type { BookingSnapshotResolver } from '../../Shared/calculation/BookingSnapshotResolver.js';
 import { FEATURE_LABELS, SENSITIVE_FEATURES } from '../../Shared/constants/FeatureLabels.js';
 import { ExplanationSnapshotUnavailableException } from '../../Shared/errors/ExplanationSnapshotUnavailableException.js';
+import { summarizeExperimentalRisk } from '../../Shared/models/ExperimentalRisk.js';
 import { notScorableReason } from '../../Shared/models/NotScorableReason.js';
 import type { PredictionResultRepository } from '../../Shared/persistence/PredictionResultRepository.js';
 import type { GetRiskFactorsInput } from './input/GetRiskFactorsInput.js';
@@ -86,6 +87,9 @@ export class GetRiskFactors {
           persisted.modelVersion === response.model_version &&
           persisted.modelHash === response.model_hash,
         probabilityNoShow: persisted?.probabilityNoShow ?? null,
+        experimentalRisk: persisted?.experimentalRisk
+          ? summarizeExperimentalRisk(persisted.experimentalRisk)
+          : null,
       },
       explanation: {
         method: explanation.method,

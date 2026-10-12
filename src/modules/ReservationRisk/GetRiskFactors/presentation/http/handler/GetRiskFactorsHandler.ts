@@ -42,7 +42,12 @@ export class GetRiskFactorsHandler {
         model: result.model,
         probabilityNoShow: result.probabilityNoShow,
         percentageNoShow: result.probabilityNoShow * 100,
-        persistedScore: result.persistedScore,
+        persistedScore: {
+          ...result.persistedScore,
+          experimentalRisk: result.persistedScore.experimentalRisk
+            ? { ...result.persistedScore.experimentalRisk }
+            : null,
+        },
         explanation: {
           ...explanation,
           units: UNITS[explanation.outputSpace],

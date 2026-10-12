@@ -73,3 +73,9 @@ apuntaba a `test/*.test.ts` (directorio vacío, sin tests).
 3. Ocultar/deshabilitar filtros por nivel mientras `classificationUnavailable=true`; mostrar «Niveles de riesgo pendientes de validación».
 4. Pedir `/risk/factors` solo al abrir el detalle (una llamada por modelo) y mostrar `units` e `interpretation` (no causal).
 5. Mostrar `notScorableReasons` cuando `predictionAvailability=NOT_SCORABLE`.
+
+## Cierre técnico 2026-10-11
+
+Ver [`../backend-node-final-closeout-20261011.md`](../backend-node-final-closeout-20261011.md): PostgreSQL
+solo lectura con guard, almacén SQLite local, cliente Python v2 y banda experimental por modelo
+(`experimentalRisk`), filtros/orden experimentales, modo sintético local y auditoría de evidencia.

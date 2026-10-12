@@ -25,6 +25,7 @@ const baseInput: ListReservationRisksInput = {
   direction: 'asc',
   modelKey: 'random_forest_full_v1',
   riskLevel: null,
+  experimentalRiskLevel: null,
   limit: 25,
   cursor: null,
   clinicScope: { kind: 'ALL_CLINICS' },
@@ -36,7 +37,11 @@ function setup(policy: RiskLevelPolicy = new PendingValidationRiskLevelPolicy())
   const useCase = new ListReservationRisks({
     reservations,
     policy,
-    evidenceSource: { servicesTemporalEvidence: 'NONE_CURRENT_REPLICA' },
+    evidenceSource: {
+      servicesTemporalEvidence: 'NONE_CURRENT_REPLICA',
+      snapshotEvidenceSource: 'VERIFIED_BOOKING_SNAPSHOT',
+    },
+    scores: store,
     mode: 'READ_ONLY_EXISTING_SCHEDULE',
     clock: new FixedClock(new Date('2026-10-25T15:00:00Z')),
   });
@@ -70,6 +75,9 @@ function scored(store: InMemoryPredictiveStore, id: string, p: number, at: strin
     riskLevel: null,
     riskPolicyVersion: null,
     riskPolicyStatus: 'pending_validation',
+    scoringApiVersion: 'v1',
+    modelHashSha256: null,
+    experimentalRisk: null,
   });
 }
 

@@ -50,15 +50,51 @@ describe('PredictiveConfig (seguridad transversal mínima Sprint 01)', () => {
     assert.throws(() => env({ ML_SERVICE_KEY: `${'a'.repeat(32)} b` }));
   });
 
-  it('SYNTHETIC_DEMO_ONLY solo contra una base de prueba y nunca en production', () => {
+  it('SYNTHETIC_DEMO_ONLY usa solo el dataset local y su propio SQLite; nunca en production', () => {
+    // Desde ADR-006 el modo sintético no lee ni escribe datos de negocio en PostgreSQL, por lo
+    // que ya no exige una base de prueba; la separación la garantizan proveedor y archivo propios.
+    const synthetic = createPredictiveConfig(env({ DATA_SOURCE_MODE: 'SYNTHETIC_DEMO_ONLY' }));
+    assert.equal(synthetic.dataSourceMode, 'SYNTHETIC_DEMO_ONLY');
+    assert.equal(synthetic.store.sqlitePath, '.local/predictive-store/synthetic_demo_only.sqlite');
+    const real = createPredictiveConfig(env());
+    assert.equal(
+      real.store.sqlitePath,
+      '.local/predictive-store/read_only_existing_schedule.sqlite',
+    );
+    assert.notEqual(synthetic.store.sqlitePath, real.store.sqlitePath);
+
     assert.throws(
-      () => createPredictiveConfig(env({ DATA_SOURCE_MODE: 'SYNTHETIC_DEMO_ONLY' })),
-      /base de prueba/,
+      () =>
+        createPredictiveConfig(
+          env({
+            NODE_ENV: 'production',
+            PREDICTIVE_API_ENABLED: 'false',
+            DATA_SOURCE_MODE: 'SYNTHETIC_DEMO_ONLY',
+          }),
+        ),
+      /no está permitido en production/,
     );
-    const ok = createPredictiveConfig(
-      env({ DATA_SOURCE_MODE: 'SYNTHETIC_DEMO_ONLY', DB_NAME_POSTGRES: 'depi_noshow_test' }),
+  });
+
+  it('política research v2: habilitada por defecto, flag estricto y allowlist de hashes validada', () => {
+    const defaults = createPredictiveConfig(env());
+    assert.equal(defaults.ml.researchRiskEnabled, true);
+    assert.deepEqual(defaults.ml.expectedResearchPolicyHashes, []);
+    assert.equal(
+      createPredictiveConfig(env({ ML_RESEARCH_RISK_ENABLED: 'false' })).ml.researchRiskEnabled,
+      false,
     );
-    assert.equal(ok.dataSourceMode, 'SYNTHETIC_DEMO_ONLY');
+    assert.throws(() => env({ ML_RESEARCH_RISK_ENABLED: 'yes' }));
+    const pinned = createPredictiveConfig(
+      env({ ML_RESEARCH_EXPECTED_POLICY_HASHES: `${'1'.repeat(64)},${'2'.repeat(64)}` }),
+    );
+    assert.deepEqual(pinned.ml.expectedResearchPolicyHashes, ['1'.repeat(64), '2'.repeat(64)]);
+    assert.throws(() => env({ ML_RESEARCH_EXPECTED_POLICY_HASHES: 'not-a-hash' }));
+    assert.equal(
+      createPredictiveConfig(env({ PREDICTIVE_STORE_SQLITE_PATH: '/tmp/x.sqlite' })).store
+        .sqlitePath,
+      '/tmp/x.sqlite',
+    );
   });
 
   it('no existe configuración para umbrales de riesgo (no se aceptan RISK_THRESHOLDS arbitrarios)', () => {

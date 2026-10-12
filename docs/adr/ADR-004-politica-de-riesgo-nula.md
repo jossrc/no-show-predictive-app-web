@@ -8,3 +8,6 @@
   ni aprobación y `operational_use_allowed=true`. `FakeRiskPolicy` vive solo en `tests/`.
 - **Consecuencias:** el orden por probabilidad está disponible como **exploratorio**; el semáforo
   real requiere un release científico (nueva política + migración).
+
+- **Actualización 2026-10-11:** se mantiene `riskLevel=null`; la banda EXPERIMENTAL de Python v2 se
+  expone por separado como `experimentalRisk` (ver ADR-007), sin cambiar este campo ni su semántica.

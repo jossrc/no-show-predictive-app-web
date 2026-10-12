@@ -3,11 +3,21 @@ import type { SnapshotEvidenceSource } from '../../../../shared/data/DataSourceM
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 import type { ClinicAccessScope } from '../../../../shared/security/RequestPrincipal.js';
 import type { Reservation } from '../models/Reservation.js';
-import type { ReservationWithScores } from '../models/ReservationScoreSummary.js';
+import type {
+  ExperimentalRiskLevel,
+  ReservationWithScores,
+} from '../models/ReservationScoreSummary.js';
 import type { ListableReservationStatus } from '../models/ReservationStatus.js';
 import type { ReservationCursorPosition } from '../pagination/ReservationCursor.js';
 
-export type ReservationSortField = 'appointmentAt' | 'probabilityNoShow';
+/**
+ * - appointmentAt: cronológico (fuente PostgreSQL).
+ * - probabilityNoShow: score exploratorio del modelo elegido, NULLS LAST.
+ * - experimentalRisk: banda experimental del modelo elegido bajo UNA política research
+ *   (`experimentalPolicyHash`); dentro de una política la banda es monótona en el score, así que
+ *   el orden es por score entre las reservas clasificadas con esa política y el resto va al final.
+ */
+export type ReservationSortField = 'appointmentAt' | 'probabilityNoShow' | 'experimentalRisk';
 export type SortDirection = 'asc' | 'desc';
 
 export interface ProbabilityRange {
@@ -27,6 +37,13 @@ export interface ReservationListCriteria {
   readonly modelKey: MlModelKey;
   /** Solo proviene de una política de riesgo APROBADA; null en Sprint 01 real. */
   readonly probabilityRange: ProbabilityRange | null;
+  /**
+   * Política research (hash) con la que se filtra/ordena por banda experimental; las reservas
+   * cuyo último score del modelo usa otra política (o v1) no se mezclan: quedan sin clasificar.
+   */
+  readonly experimentalPolicyHash: string | null;
+  /** Filtro por banda EXPERIMENTAL del modelo elegido (exige `experimentalPolicyHash`). */
+  readonly experimentalRiskLevel: ExperimentalRiskLevel | null;
   readonly snapshotEvidence: SnapshotEvidenceSource;
   readonly after: ReservationCursorPosition | null;
   readonly limit: number;
@@ -43,7 +60,10 @@ export interface ReservationListPage {
   readonly predictiveStoreAvailable: boolean;
 }
 
-/** Lectura de reservas sobre raw_flow/analytics (solo lectura) + scores persistidos en ml. */
+/**
+ * Reservas de la fuente PostgreSQL (solo lectura) enriquecidas con los scores del almacén
+ * predictivo local. Implementación runtime: ScoredReservationRepository.
+ */
 export interface ReservationRepository {
   list(criteria: ReservationListCriteria): Promise<ReservationListPage>;
   findById(reservationId: DecimalId): Promise<Reservation | null>;

@@ -10,6 +10,7 @@ import { REQUEST_ID_HEADER, resolveRequestId } from './http/request/ResolveReque
 import type {
   MlHealthRegistration,
   PredictiveApiRegistration,
+  PredictiveStoreHealthRegistration,
 } from './PredictiveModulesDependencies.js';
 import { registerModules } from './RegisterModules.js';
 
@@ -21,6 +22,7 @@ export interface BuildAppOptions {
   mysqlHealthCheck: SequelizeHealthCheck | null;
   exceptionReporters?: readonly ExceptionReporter[];
   mlHealth?: MlHealthRegistration | undefined;
+  predictiveStore?: PredictiveStoreHealthRegistration | null | undefined;
   predictiveApi?: PredictiveApiRegistration | null | undefined;
   loggerInstance?: FastifyBaseLogger | undefined;
 }
@@ -51,6 +53,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     postgresHealthCheck: options.postgresHealthCheck,
     mysqlHealthCheck: options.mysqlHealthCheck,
     mlHealth: options.mlHealth,
+    predictiveStore: options.predictiveStore,
     predictiveApi: options.predictiveApi,
   });
   if (Environment.NODE_ENV === 'development') {

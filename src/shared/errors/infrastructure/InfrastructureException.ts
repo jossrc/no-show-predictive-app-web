@@ -1,10 +1,12 @@
 import { BaseException } from '../BaseException.js';
-import type { ExceptionMetadata } from '../ExceptionMetadata.js';
+import type { ExceptionDetails, ExceptionMetadata } from '../ExceptionMetadata.js';
 
 export interface InfrastructureExceptionProps {
   message: string;
   code: string;
   metadata?: ExceptionMetadata | undefined;
+  /** Detalle público y saneado (sin secretos ni datos personales). */
+  details?: ExceptionDetails | undefined;
   cause?: unknown;
 }
 

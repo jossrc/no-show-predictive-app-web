@@ -100,6 +100,7 @@ export function makeBookingEvidence(overrides: Partial<BookingEvidence> = {}): B
     ],
     servicesTemporalEvidence: 'CAPTURED_AT_BOOKING',
     sourceIngestionBatchId: null,
+    evidenceSource: 'VERIFIED_BOOKING_SNAPSHOT',
     ...overrides,
   };
 }

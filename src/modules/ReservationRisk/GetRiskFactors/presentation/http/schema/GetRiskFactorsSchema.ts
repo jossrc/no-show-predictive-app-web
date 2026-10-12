@@ -4,6 +4,7 @@ import {
   DEFAULT_ML_MODEL_KEY,
   ML_MODEL_KEYS,
 } from '../../../../../../infrastructure/http/ml/MlFeatureContract.js';
+import { ExperimentalRiskSummarySchema } from '../../../../../Reservations/Shared/http/ReservationHttpSchemas.js';
 import { ReservationIdParamsSchema } from '../../../../../Reservations/Shared/http/ReservationIdParams.js';
 
 const strictObject = (properties: Record<string, unknown>) =>
@@ -39,7 +40,7 @@ export const GetRiskFactorsSchema = {
   tags: ['Explanations'],
   summary: 'Consultar factores explicativos SHAP',
   description:
-    'Factores asociados localmente a la salida del modelo; no representan causalidad. Utiliza el snapshot original y no modifica el score persistido. Random Forest: outputSpace=probability, outputLink=identity y contribuciones en escala de probabilidad. XGBoost: outputSpace=log_odds, outputLink=sigmoid y contribuciones en log-odds, no puntos porcentuales. Sin snapshot válido devuelve 409 EXPLANATION_SNAPSHOT_UNAVAILABLE. Las estimaciones siguen siendo exploratorias y sin nivel de riesgo aprobado.',
+    'Factores asociados localmente a la salida del modelo; no representan causalidad. Utiliza el snapshot original y no modifica el score persistido. Random Forest: outputSpace=probability, outputLink=identity y contribuciones en escala de probabilidad. XGBoost: outputSpace=log_odds, outputLink=sigmoid y contribuciones en log-odds, no puntos porcentuales. Sin snapshot válido devuelve 409 EXPLANATION_SNAPSHOT_UNAVAILABLE. SHAP usa el endpoint v1 de explicación (v2 no tiene explain) con exactamente el snapshot guardado; un fallo de SHAP no altera el score persistido. Las estimaciones siguen siendo exploratorias y sin nivel de riesgo operativo aprobado; persistedScore.experimentalRisk informa la banda exploratoria guardada.',
   security: [{ InternalApiKey: [] }],
   params: ReservationIdParamsSchema,
   querystring: {
@@ -94,6 +95,11 @@ export const GetRiskFactorsSchema = {
                 'Indica si el score guardado tiene la misma versión y hash que el modelo explicado.',
             },
             probabilityNoShow: { type: ['number', 'null'] },
+            experimentalRisk: {
+              ...ExperimentalRiskSummarySchema,
+              description:
+                'Banda EXPERIMENTAL v2 del score persistido de este modelo; SHAP no la recalcula.',
+            },
           }),
           explanation: strictObject({
             method: { type: 'string', enum: ['tree_shap'] },

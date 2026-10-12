@@ -1,4 +1,8 @@
-import type { DataSourceMode } from '../../../../shared/data/DataSourceMode.js';
+import {
+  allowedSnapshotEvidence,
+  type DataSourceMode,
+  type SnapshotEvidenceSource,
+} from '../../../../shared/data/DataSourceMode.js';
 import type { Reservation } from '../../../Reservations/Shared/models/Reservation.js';
 import {
   notScorableReason,
@@ -24,6 +28,7 @@ export function preAssessScorability(
   context: {
     mode: DataSourceMode;
     servicesTemporalEvidence: BookingEvidenceSource['servicesTemporalEvidence'];
+    snapshotEvidenceSource: SnapshotEvidenceSource;
   },
 ): ScorabilityPreAssessment {
   if (facts.hasScores) return { availability: 'AVAILABLE_EXPLORATORY', reasons: [] };
@@ -32,7 +37,8 @@ export function preAssessScorability(
   const codes: NotScorableReasonCode[] = [];
   if (reservation.status !== 'SCHEDULED') codes.push('RESERVATION_NOT_SCHEDULED');
 
-  if (context.mode === 'SYNTHETIC_DEMO_ONLY') {
+  if (context.snapshotEvidenceSource !== allowedSnapshotEvidence(context.mode)) {
+    // Fuente de otro modo (p. ej. réplica real en modo sintético): nunca se mezcla.
     codes.push('NO_USABLE_SNAPSHOT_IN_MODE');
   } else {
     if (reservation.bookingCreatedAt === null) codes.push('MISSING_BOOKING_TIME');

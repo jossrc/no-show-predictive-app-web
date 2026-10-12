@@ -36,7 +36,7 @@ export const RequestReservationPredictionSchema = {
   tags: ['Predictions'],
   summary: 'Solicitar una predicción exploratoria',
   description:
-    'Acción explícita sobre un snapshot temporalmente válido de la reserva. compare consulta Random Forest y XGBoost de forma independiente; single requiere modelKey. No genera ensemble, no selecciona un ganador ni reentrena modelos. 201 crea y persiste un run; 200 reutiliza una predicción existente y run.replayed indica la reutilización. Conserva la probabilidad original sin redondear; percentageNoShow = probabilityNoShow * 100. Evaluación EXPLORATORY_NOT_VALIDATED, calibración not_operationally_validated y operationalUseAllowed=false; riskLevel=null, riskPolicyStatus=pending_validation y objetivo proxy NO_SHOW_CANDIDATE. Sin evidencia suficiente devuelve 409 NOT_SCORABLE. Cuerpo máximo: 1024 bytes. Los ejemplos de petición son sintéticos.',
+    'Acción explícita sobre un snapshot temporalmente válido de la reserva. compare consulta Random Forest y XGBoost de forma independiente; single requiere modelKey. No genera ensemble, no selecciona un ganador ni reentrena modelos. 201 crea y persiste un run; 200 reutiliza una predicción existente y run.replayed indica la reutilización. Conserva la probabilidad original sin redondear; percentageNoShow = probabilityNoShow * 100. Evaluación EXPLORATORY_NOT_VALIDATED, calibración not_operationally_validated y operationalUseAllowed=false; riskLevel=null (operativo), riskPolicyStatus=pending_validation y objetivo proxy NO_SHOW_CANDIDATE. Con ML_RESEARCH_RISK_ENABLED=true (por defecto) usa Python v2 y persiste junto al score la banda EXPERIMENTAL de cada modelo (experimentalRisk); si la política research no está disponible responde 503 RESEARCH_RISK_POLICY_NOT_READY sin guardar ni sustituir por v1 ni por LOW. La idempotencia considera snapshot, modelo, versión y política. Sin evidencia suficiente devuelve 409 NOT_SCORABLE. Cuerpo máximo: 1024 bytes. Los ejemplos de petición son sintéticos.',
   security: [{ InternalApiKey: [] }],
   params: ReservationIdParamsSchema,
   body: {
@@ -114,7 +114,7 @@ export const RequestReservationPredictionSchema = {
     503: {
       ...ErrorResponseSchema,
       description:
-        'ML_UNAVAILABLE, ML_CREDENTIAL_REJECTED o PERSISTENCE_UNAVAILABLE: dependencia ML o persistencia no disponible.',
+        'ML_UNAVAILABLE, ML_CREDENTIAL_REJECTED, PERSISTENCE_UNAVAILABLE o RESEARCH_RISK_POLICY_NOT_READY (política experimental v2 no disponible; details.reason: disabled, models_unavailable, missing_policy, hash_mismatch, invalid_policy, model_identity_mismatch, insufficient_support, not_allowlisted).',
     },
     504: {
       ...ErrorResponseSchema,

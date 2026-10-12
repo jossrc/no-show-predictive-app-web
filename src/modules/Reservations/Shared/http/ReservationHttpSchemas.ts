@@ -29,6 +29,24 @@ export const ReservationBodySchema = {
   },
 } as const;
 
+/** Banda EXPERIMENTAL compacta (research v2) para listados; null si el score no la tiene. */
+export const ExperimentalRiskSummarySchema = {
+  type: ['object', 'null'],
+  additionalProperties: false,
+  required: ['level', 'label', 'status', 'policyId', 'policyVersion', 'policyHash'],
+  properties: {
+    level: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    label: {
+      type: 'string',
+      enum: ['Bajo (exploratorio)', 'Medio (exploratorio)', 'Alto (exploratorio)'],
+    },
+    status: { type: 'string', enum: ['RESEARCH_PROVISIONAL'] },
+    policyId: { type: 'string' },
+    policyVersion: { type: 'string' },
+    policyHash: { type: 'string' },
+  },
+} as const;
+
 export const ScoreSummarySchema = {
   type: 'object',
   additionalProperties: false,
@@ -41,6 +59,7 @@ export const ScoreSummarySchema = {
     'scoredAt',
     'predictionRunId',
     'riskLevel',
+    'experimentalRisk',
   ],
   properties: {
     modelKey: { type: 'string' },
@@ -65,7 +84,12 @@ export const ScoreSummarySchema = {
       enum: ['LOW', 'MEDIUM', 'HIGH', null],
       examples: [null],
       description:
-        'Permanece null mientras la política científica de niveles esté pendiente de validación.',
+        'Riesgo OPERATIVO: permanece null mientras la política científica de niveles esté pendiente de validación.',
+    },
+    experimentalRisk: {
+      ...ExperimentalRiskSummarySchema,
+      description:
+        'Banda relativa EXPERIMENTAL de Python v2 persistida con este score (RESEARCH_PROVISIONAL); null sin política research.',
     },
   },
 } as const;

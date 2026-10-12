@@ -78,3 +78,20 @@ entorno del proceso Node; nunca en el navegador ni en el repositorio).
 | 503 `ML_CIRCUIT_OPEN`                | ≥5 fallos seguidos; esperar 30 s o revisar Python                 |
 | 503 `EXPLANATION_UNAVAILABLE`        | Python sin `ML_ENABLE_LOCAL_EXPLANATIONS=true`                    |
 | 502 `ML_CONTRACT_VIOLATION`          | Release Python distinto del contrato anclado: revisar y re-anclar |
+
+## Research v2 (bandas experimentales) — 2026-10-11
+
+- Rutas: `GET /internal/v2/risk-policy`, `POST /internal/v2/predictions`, `POST /internal/v2/predictions/compare`
+  (misma `X-Service-API-Key`, timeouts, limitador y circuit breaker). v1 se conserva (explain y batch solo v1).
+- Contrato anclado: `tests/contracts/ml/ml-internal-v2.openapi.json` (SHA-256 `840b48d6…6ce65`) y
+  `ml-internal-v2.types.ts.txt` (`eb40e5dc…056de`), copias de `depi-noshow-ml@b0e11893`.
+- Validación: Zod estricto (`MlResearchContractSchemas.ts`) + integridad (`MlResearchContractValidator.ts`)
+  - cruce con el catálogo (`assertScoreMatchesPolicy`). `CachedResearchPolicyCatalog`: TTL, una carga
+    concurrente, UNAVAILABLE re-consultado a los 5 s, allowlist opcional.
+- 503 `RESEARCH_RISK_POLICY_NOT_READY` ⇒ `MlResearchPolicyUnavailableException` (razón tipada); no degrada
+  el circuito de v1.
+- Paridad real (2026-10-11): RF 0.6976400433344135, XGB 0.9159286618232727, Δ 0.21828861848885917, ambos
+  HIGH. **Observación:** el RF de Python varía 1–2 ULP entre llamadas (…135 en 29/30, …133 en 1/30; XGB
+  estable). Se trata como tolerancia 1e-12 en pruebas; no afecta la banda salvo en la frontera exacta.
+- Live: `tests/integration/infrastructure/http/ml/RealMlResearchService.test.ts` y
+  `tests/integration/e2e/SyntheticLocalRealMlFlow.test.ts` (opt-in `ML_RUN_REAL_INTEGRATION=1`).

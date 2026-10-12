@@ -7,9 +7,32 @@ import {
   type SafeFieldIssue,
 } from './errors/MlInvalidFeaturesException.js';
 import { MlRateLimitedException } from './errors/MlRateLimitedException.js';
+import {
+  MlResearchPolicyUnavailableException,
+  type ResearchPolicyUnavailableReason,
+} from './errors/MlResearchPolicyUnavailableException.js';
 import { MlUnavailableException } from './errors/MlUnavailableException.js';
+import { RESEARCH_POLICY_UNAVAILABLE_REASONS } from './MlResearchContractSchemas.js';
 
-export type MlOperation = 'models' | 'ready' | 'predict' | 'compare' | 'explain' | 'batch';
+export type MlOperation =
+  | 'models'
+  | 'ready'
+  | 'predict'
+  | 'compare'
+  | 'explain'
+  | 'batch'
+  | 'research_policy'
+  | 'research_predict'
+  | 'research_compare';
+
+export const RESEARCH_POLICY_NOT_READY_CODE = 'RESEARCH_RISK_POLICY_NOT_READY';
+
+function researchReason(issues: readonly SafeFieldIssue[]): ResearchPolicyUnavailableReason {
+  const reason = issues.find((issue) => issue.field === 'experimental_risk')?.reason;
+  return (RESEARCH_POLICY_UNAVAILABLE_REASONS as readonly string[]).includes(reason ?? '')
+    ? (reason as ResearchPolicyUnavailableReason)
+    : 'unknown';
+}
 
 const SAFE_FIELD = /^[A-Za-z0-9_.[\]]{1,120}$/;
 const SAFE_REASON = /^[a-z_]{1,60}$/;
@@ -76,6 +99,14 @@ export function mapMlHttpError(status: number, body: unknown, operation: MlOpera
             httpStatus: status,
           });
     case 503:
+      if (upstream.code === RESEARCH_POLICY_NOT_READY_CODE) {
+        // Solo la política research falló: v1 sigue disponible (no es ML_UNAVAILABLE).
+        return new MlResearchPolicyUnavailableException({
+          operation,
+          reason: researchReason(upstream.issues),
+          httpStatus: status,
+        });
+      }
       return operation === 'explain' && upstream.code === 'EXPLANATION_NOT_READY'
         ? new MlExplanationUnavailableException({ upstreamCode: upstream.code, httpStatus: status })
         : new MlUnavailableException({ code: 'ML_UNAVAILABLE', operation, httpStatus: status });

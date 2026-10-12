@@ -4,6 +4,7 @@ import {
   toReservationBody,
   toScoreSummaryBody,
 } from '../../../../../Reservations/Shared/http/ReservationHttpMapper.js';
+import { EXPERIMENTAL_RISK_NOTICE } from '../../../../Shared/http/RiskAssessmentHttpMapper.js';
 import type { ListReservationRisks } from '../../../application/ListReservationRisks.js';
 import type { ListReservationRisksRequest } from '../request/ListReservationRisksQuery.js';
 import type { ListReservationRisksResponse } from '../response/ListReservationRisksResponse.js';
@@ -24,6 +25,7 @@ export class ListReservationRisksHandler {
       direction: query.direction,
       modelKey: query.modelKey,
       riskLevel: query.riskLevel ?? null,
+      experimentalRiskLevel: query.experimentalRiskLevel ?? null,
       limit: query.limit,
       cursor: query.cursor ?? null,
       clinicScope: requirePrincipal(request).clinicScope,
@@ -37,7 +39,12 @@ export class ListReservationRisksHandler {
           notScorableReasons: [...item.notScorableReasons],
           riskLevel: null,
           riskPolicyStatus: result.riskPolicyStatus,
-          classificationUnavailable: result.classificationUnavailable,
+          classificationUnavailable:
+            result.operationalClassificationUnavailable && item.experimentalRisk === null,
+          operationalClassificationUnavailable: result.operationalClassificationUnavailable,
+          experimentalClassificationUnavailable: item.experimentalRisk === null,
+          experimentalRisk: item.experimentalRisk ? { ...item.experimentalRisk } : null,
+          experimentalPolicyCurrent: item.experimentalPolicyCurrent,
           validationStatus: 'EXPLORATORY_NOT_VALIDATED',
           probabilities: item.scores.map((score) =>
             toScoreSummaryBody(score, score.policyRiskLevel),
@@ -55,6 +62,17 @@ export class ListReservationRisksHandler {
       sort: result.sort,
       riskPolicyStatus: result.riskPolicyStatus,
       classificationUnavailable: result.classificationUnavailable,
+      operationalClassificationUnavailable: result.operationalClassificationUnavailable,
+      experimentalClassificationUnavailable: result.experimentalClassificationUnavailable,
+      experimentalRiskPolicy: result.experimentalRiskPolicy
+        ? {
+            ...result.experimentalRiskPolicy,
+            status: 'RESEARCH_PROVISIONAL',
+            classificationBasis: 'RESEARCH_PROVISIONAL',
+            operationalUseAllowed: false,
+            notice: EXPERIMENTAL_RISK_NOTICE,
+          }
+        : null,
       sourceStatus: result.sourceStatus,
       predictiveStoreAvailable: result.predictiveStoreAvailable,
       requestId: request.id,

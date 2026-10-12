@@ -1,5 +1,8 @@
 import type { Reservation } from '../models/Reservation.js';
-import type { ReservationScoreSummary } from '../models/ReservationScoreSummary.js';
+import type {
+  ExperimentalRiskSummary,
+  ReservationScoreSummary,
+} from '../models/ReservationScoreSummary.js';
 
 export interface ReservationBody {
   reservationId: string;
@@ -23,7 +26,10 @@ export interface ScoreSummaryBody {
   percentageNoShow: number;
   scoredAt: string;
   predictionRunId: string;
+  /** Riesgo OPERATIVO aprobado (hoy null). */
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  /** Banda EXPERIMENTAL research v2 persistida con el score. */
+  experimentalRisk: ExperimentalRiskSummary | null;
 }
 
 export function toReservationBody(
@@ -57,5 +63,6 @@ export function toScoreSummaryBody(
     scoredAt: score.scoredAt.toISOString(),
     predictionRunId: score.predictionRunId,
     riskLevel,
+    experimentalRisk: score.experimentalRisk ? { ...score.experimentalRisk } : null,
   };
 }

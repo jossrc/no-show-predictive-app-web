@@ -4,20 +4,22 @@ import { RiskFeaturesBuilder } from '../../../src/modules/ReservationRisk/Shared
 import { computeSnapshotHash } from '../../../src/modules/ReservationRisk/Shared/calculation/SnapshotHash.js';
 import type { BookingFeatureSnapshot } from '../../../src/modules/ReservationRisk/Shared/models/BookingFeatureSnapshot.js';
 import { SequelizeBookingEvidenceSource } from '../../../src/modules/ReservationRisk/Shared/persistence/sequelize/SequelizeBookingEvidenceSource.js';
+import type { BookingSnapshotRepository } from '../../../src/modules/ReservationRisk/Shared/persistence/BookingSnapshotRepository.js';
 import { SequelizeBookingSnapshotRepository } from '../../../src/modules/ReservationRisk/Shared/persistence/sequelize/SequelizeBookingSnapshotRepository.js';
 
 /**
  * Captura snapshots SYNTHETIC_DEMO_ONLY a partir de la réplica SINTÉTICA de la BD de prueba,
- * usando el builder y el historial as-of reales. Representa lo que haría una captura en el
+ * usando el builder y el historial as-of reales, en el almacén indicado (SQLite local en las
+ * pruebas; el adaptador PostgreSQL `ml` de la BD de prueba en el script de demo heredado). Representa lo que haría una captura en el
  * instante de reserva; nunca se ejecuta contra datos comerciales (TestDatabase lo impide).
  */
 export async function captureSyntheticSnapshots(
   sequelize: Sequelize,
   reservationIds: readonly string[],
+  snapshots: BookingSnapshotRepository = new SequelizeBookingSnapshotRepository(sequelize),
 ): Promise<BookingFeatureSnapshot[]> {
   const evidenceSource = new SequelizeBookingEvidenceSource(sequelize, 5000);
   const history = new SequelizeClientHistoryRepository(sequelize, 5000);
-  const snapshots = new SequelizeBookingSnapshotRepository(sequelize);
   const builder = new RiskFeaturesBuilder();
   const captured: BookingFeatureSnapshot[] = [];
 

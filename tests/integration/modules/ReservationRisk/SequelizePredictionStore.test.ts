@@ -81,6 +81,9 @@ describe(
       riskLevel: null,
       riskPolicyVersion: null,
       riskPolicyStatus: 'pending_validation',
+      scoringApiVersion: 'v1',
+      modelHashSha256: null,
+      experimentalRisk: null,
     });
 
     const run = (
@@ -97,6 +100,7 @@ describe(
       runRequestedAt: new Date(Date.now() - 5),
       completedAt: new Date(),
       mlLatencyMs: 5,
+      scoringApiVersion: 'v1' as const,
     });
 
     it('saveIfAbsent es idempotente por (reserva, hash); otra evidencia ⇒ snapshot nuevo; BIGINT exacto; JSON intacto', async () => {

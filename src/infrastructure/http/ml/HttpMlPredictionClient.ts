@@ -14,6 +14,11 @@ import type {
   MlPredictionRequest,
   MlPredictionResponse,
   MlReadyResponse,
+  MlResearchCompareRequest,
+  MlResearchCompareResponse,
+  MlResearchPolicyCatalog,
+  MlResearchPredictionRequest,
+  MlResearchPredictionResponse,
 } from './MlContractTypes.js';
 import {
   validateBatchResponse,
@@ -24,11 +29,17 @@ import {
   validateReadyResponse,
 } from './MlContractValidator.js';
 import { toCanonicalFeatures } from './MlFeatureContract.js';
+import {
+  validateResearchCompareResponse,
+  validateResearchPolicyCatalog,
+  validateResearchPredictionResponse,
+} from './MlResearchContractValidator.js';
 import { isServerSideFailure, mapMlHttpError, type MlOperation } from './MlHttpErrorMapper.js';
 import type { MlPredictionClient, MlRequestContext } from './MlPredictionClient.js';
 import type { MlTimeoutPolicy } from './MlTimeoutPolicy.js';
 import { MlContractViolationException } from './errors/MlContractViolationException.js';
 import { MlRateLimitedException } from './errors/MlRateLimitedException.js';
+import { MlResearchPolicyUnavailableException } from './errors/MlResearchPolicyUnavailableException.js';
 import { MlTimeoutException } from './errors/MlTimeoutException.js';
 import { MlUnavailableException } from './errors/MlUnavailableException.js';
 
@@ -163,6 +174,69 @@ export class HttpMlPredictionClient implements MlPredictionClient {
     );
   }
 
+  getResearchPolicy(context: MlRequestContext): Promise<MlResearchPolicyCatalog> {
+    return this.call(
+      {
+        operation: 'research_policy',
+        method: 'GET',
+        path: '/internal/v2/risk-policy',
+        authenticated: true,
+        validate: validateResearchPolicyCatalog,
+        logFields: (result) => ({
+          researchPolicyAvailable: result.available,
+          researchPolicyReason: result.reason,
+          policyHashes: result.policies.map((policy) => policy.policy_hash.slice(0, 12)),
+        }),
+      },
+      context,
+    );
+  }
+
+  predictResearch(
+    request: MlResearchPredictionRequest,
+    context: MlRequestContext,
+  ): Promise<MlResearchPredictionResponse> {
+    return this.call(
+      {
+        operation: 'research_predict',
+        method: 'POST',
+        path: '/internal/v2/predictions',
+        body: { ...contractBase(request), model_key: request.model_key },
+        authenticated: true,
+        validate: (data) => validateResearchPredictionResponse(data, request.model_key),
+        logFields: (result) => ({
+          modelKey: result.model_key,
+          modelHash: result.model_hash,
+          policyHash: result.experimental_risk.policy_hash.slice(0, 12),
+        }),
+      },
+      context,
+    );
+  }
+
+  compareResearch(
+    request: MlResearchCompareRequest,
+    context: MlRequestContext,
+  ): Promise<MlResearchCompareResponse> {
+    return this.call(
+      {
+        operation: 'research_compare',
+        method: 'POST',
+        path: '/internal/v2/predictions/compare',
+        body: contractBase(request),
+        authenticated: true,
+        validate: validateResearchCompareResponse,
+        logFields: (result) => ({
+          modelHashes: result.results.map((score) => score.model_hash),
+          policyHashes: result.results.map((score) =>
+            score.experimental_risk.policy_hash.slice(0, 12),
+          ),
+        }),
+      },
+      context,
+    );
+  }
+
   batch(request: MlBatchRequest, context: MlRequestContext): Promise<MlBatchResponse> {
     const itemCount = request.items.length;
     if (itemCount < 1 || itemCount > this.options.batchMaxItems) {
@@ -285,7 +359,11 @@ export class HttpMlPredictionClient implements MlPredictionClient {
     if (callerAborted || (error instanceof MlRateLimitedException && status === null)) {
       // La llamada no llegó a evaluar la salud del servicio (cola local o cliente cancelado).
       circuitBreaker.releaseProbe();
-    } else if (error instanceof MlRateLimitedException) {
+    } else if (
+      error instanceof MlRateLimitedException ||
+      error instanceof MlResearchPolicyUnavailableException
+    ) {
+      // Saturación o política research no lista: los modelos siguen sanos (v1 operativo).
       circuitBreaker.recordNeutral();
     } else if (status !== null && !isServerSideFailure(status)) {
       circuitBreaker.recordNeutral();

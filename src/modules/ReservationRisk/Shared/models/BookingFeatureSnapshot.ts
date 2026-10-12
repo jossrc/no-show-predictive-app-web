@@ -2,7 +2,7 @@ import type { PredictionFeatures } from '../../../../infrastructure/http/ml/MlFe
 import type { SnapshotEvidenceSource } from '../../../../shared/data/DataSourceMode.js';
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 
-/** Snapshot inmutable persistido en ml.booking_feature_snapshots. */
+/** Snapshot inmutable persistido en el almacén predictivo local (booking_feature_snapshots). */
 export interface BookingFeatureSnapshot {
   readonly snapshotId: DecimalId;
   readonly reservationId: DecimalId;
