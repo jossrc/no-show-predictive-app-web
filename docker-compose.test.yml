@@ -1,0 +1,24 @@
+# PostgreSQL EXCLUSIVO para pruebas de integración/E2E/rendimiento del Sprint 01.
+# - Proyecto Compose propio (no comparte contenedores con docker-compose.yml).
+# - Almacenamiento tmpfs: no existe volumen persistente; al detenerse se pierden los datos sintéticos.
+# - Puerto solo en loopback y distinto de 5432 (la BD real depi_noshow nunca se usa en tests).
+# - Credenciales exclusivamente de prueba; no son credenciales de ningún entorno real.
+name: depi_noshow_test_stack
+
+services:
+  postgres-test:
+    image: postgres:18.4
+    container_name: depi_noshow_test
+    environment:
+      POSTGRES_DB: depi_noshow_test
+      POSTGRES_USER: test_admin
+      POSTGRES_PASSWORD: test_only_not_a_secret
+    ports:
+      - '127.0.0.1:55432:5432'
+    tmpfs:
+      - /var/lib/postgresql:size=2g
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U test_admin -d depi_noshow_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30

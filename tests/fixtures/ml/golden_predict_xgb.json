@@ -1,0 +1,21 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml f2f30b5f a la entrada artificial examples/*.json (reports/api-smoke-prompt8-20261010-183350.json). No son datos de clientes ni m\u00e9tricas.",
+  "status": 200,
+  "body": {
+    "api_version": "v1",
+    "model_key": "xgboost_full_v1",
+    "algorithm": "xgboost",
+    "model_version": "xgboost_full_v1:376d3db9d4d3",
+    "model_hash": "376d3db9d4d3",
+    "feature_version": "BOOKING_BASELINE_V1",
+    "probability_no_show": 0.9159286618232727,
+    "prediction_target": "NO_SHOW_CANDIDATE",
+    "target_class": 1,
+    "risk_level": null,
+    "risk_policy_status": "pending_validation",
+    "validation_status": "EXPLORATORY_NOT_VALIDATED",
+    "calibration_status": "not_operationally_validated",
+    "operational_use_allowed": false,
+    "request_id": "fe1b6d2c47d449c58475054631e75427"
+  }
+}

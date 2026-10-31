@@ -1,0 +1,45 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml b0e11893 (research_risk_v1_1) a la entrada artificial examples/prediction_single.json (model_key XGB), capturada 2026-10-11 por HTTP local. No son datos de clientes ni métricas.",
+  "status": 200,
+  "body": {
+    "api_version": "v2",
+    "model_key": "xgboost_full_v1",
+    "algorithm": "xgboost",
+    "model_version": "xgboost_full_v1:376d3db9d4d3",
+    "model_hash": "376d3db9d4d3",
+    "feature_version": "BOOKING_BASELINE_V1",
+    "probability_no_show": 0.9159286618232727,
+    "prediction_target": "NO_SHOW_CANDIDATE",
+    "target_class": 1,
+    "risk_level": null,
+    "risk_policy_status": "pending_validation",
+    "validation_status": "EXPLORATORY_NOT_VALIDATED",
+    "calibration_status": "not_operationally_validated",
+    "operational_use_allowed": false,
+    "request_id": "golden-v2-xgb",
+    "model_hash_sha256": "376d3db9d4d32b69784aeb49908ed4f564f95d4528c1f9ff4e766d9fdea505db",
+    "probability_no_show_percent": 91.59286618232727,
+    "experimental_risk": {
+      "level": "HIGH",
+      "label": "Alto (exploratorio)",
+      "status": "RESEARCH_PROVISIONAL",
+      "policy_id": "xgboost_full_v1_tertiles_202604_202605",
+      "policy_version": "research_risk_v1_1",
+      "policy_hash": "208c706d839b7c8b71134cd225da4bc1bb935c5d4bd06cbb898a8d8f84ee7032",
+      "score_space": "raw_probability_no_show",
+      "low_upper_threshold": 0.243454828858,
+      "high_lower_threshold": 0.4351593256,
+      "boundary_rule": "LOW:p<t_low;MEDIUM:t_low<=p<t_high;HIGH:p>=t_high",
+      "meaning": "relative_score_band_not_validated_absolute_risk",
+      "operational_use_allowed": false,
+      "approved_by": null,
+      "warnings": [
+        "Relative raw-score bands, not validated absolute risks or cancellation probabilities.",
+        "Original model/hyperparameters already exposed to April-June validation; June is not independent model evaluation.",
+        "Historical booking/catalog snapshots and actual label availability remain unaccredited.",
+        "Approximate June-July business transition; post-change performance is unknown without independent evaluation.",
+        "No operational approval; no automatic commercial actions. Calibration candidates are offline only."
+      ]
+    }
+  }
+}

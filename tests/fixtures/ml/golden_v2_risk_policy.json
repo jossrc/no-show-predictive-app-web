@@ -1,0 +1,73 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml b0e11893 (research_risk_v1_1) a la entrada artificial GET /internal/v2/risk-policy, capturada 2026-10-11 por HTTP local. No son datos de clientes ni métricas.",
+  "status": 200,
+  "body": {
+    "api_version": "v2",
+    "status": "RESEARCH_PROVISIONAL",
+    "available": true,
+    "reason": null,
+    "policies": [
+      {
+        "model_key": "random_forest_full_v1",
+        "model_version": "random_forest_full_v1:4e3c86a17005",
+        "model_hash_sha256": "4e3c86a170056146cf82a2cc109ae9051b81845608dbd58aae11e43d97492e08",
+        "feature_version": "BOOKING_BASELINE_V1",
+        "policy_id": "random_forest_full_v1_tertiles_202604_202605",
+        "policy_version": "research_risk_v1_1",
+        "policy_hash": "1d58ce962e899b758275f7191244225e8c970cf2db9661ffcb21be9b63a4ce74",
+        "low_upper_threshold": 0.302192334412,
+        "high_lower_threshold": 0.460052607619,
+        "boundary_rule": "LOW:p<t_low;MEDIUM:t_low<=p<t_high;HIGH:p>=t_high",
+        "method": "score_quantiles_tertiles_exploratory",
+        "meaning": "relative_score_band_not_validated_absolute_risk",
+        "development_start": "2026-04-01T00:00:00-05:00",
+        "development_end_exclusive": "2026-06-01T00:00:00-05:00",
+        "label_cutoff_exclusive": "2026-07-01T05:00:00+00:00",
+        "development_rows": 33808,
+        "calibration_ece_uniform_10": 0.14435993417,
+        "status": "RESEARCH_PROVISIONAL",
+        "operational_use_allowed": false,
+        "approved_by": null,
+        "warnings": [
+          "Relative raw-score bands, not validated absolute risks or cancellation probabilities.",
+          "Original model/hyperparameters already exposed to April-June validation; June is not independent model evaluation.",
+          "Historical booking/catalog snapshots and actual label availability remain unaccredited.",
+          "Approximate June-July business transition; post-change performance is unknown without independent evaluation.",
+          "No operational approval; no automatic commercial actions. Calibration candidates are offline only."
+        ]
+      },
+      {
+        "model_key": "xgboost_full_v1",
+        "model_version": "xgboost_full_v1:376d3db9d4d3",
+        "model_hash_sha256": "376d3db9d4d32b69784aeb49908ed4f564f95d4528c1f9ff4e766d9fdea505db",
+        "feature_version": "BOOKING_BASELINE_V1",
+        "policy_id": "xgboost_full_v1_tertiles_202604_202605",
+        "policy_version": "research_risk_v1_1",
+        "policy_hash": "208c706d839b7c8b71134cd225da4bc1bb935c5d4bd06cbb898a8d8f84ee7032",
+        "low_upper_threshold": 0.243454828858,
+        "high_lower_threshold": 0.4351593256,
+        "boundary_rule": "LOW:p<t_low;MEDIUM:t_low<=p<t_high;HIGH:p>=t_high",
+        "method": "score_quantiles_tertiles_exploratory",
+        "meaning": "relative_score_band_not_validated_absolute_risk",
+        "development_start": "2026-04-01T00:00:00-05:00",
+        "development_end_exclusive": "2026-06-01T00:00:00-05:00",
+        "label_cutoff_exclusive": "2026-07-01T05:00:00+00:00",
+        "development_rows": 33808,
+        "calibration_ece_uniform_10": 0.100343621687,
+        "status": "RESEARCH_PROVISIONAL",
+        "operational_use_allowed": false,
+        "approved_by": null,
+        "warnings": [
+          "Relative raw-score bands, not validated absolute risks or cancellation probabilities.",
+          "Original model/hyperparameters already exposed to April-June validation; June is not independent model evaluation.",
+          "Historical booking/catalog snapshots and actual label availability remain unaccredited.",
+          "Approximate June-July business transition; post-change performance is unknown without independent evaluation.",
+          "No operational approval; no automatic commercial actions. Calibration candidates are offline only."
+        ]
+      }
+    ],
+    "validation_status": "EXPLORATORY_NOT_VALIDATED",
+    "operational_use_allowed": false,
+    "request_id": "golden-v2-policy"
+  }
+}

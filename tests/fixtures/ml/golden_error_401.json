@@ -1,0 +1,12 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml f2f30b5f a la entrada artificial examples/*.json (reports/api-smoke-prompt8-20261010-183350.json). No son datos de clientes ni m\u00e9tricas.",
+  "status": 401,
+  "body": {
+    "error": {
+      "code": "UNAUTHORIZED_SERVICE",
+      "message": "Credencial de servicio ausente o inv\u00e1lida.",
+      "details": []
+    },
+    "request_id": "9fa81ec996a24161ad6e9c771b1f6c13"
+  }
+}

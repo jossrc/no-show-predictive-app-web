@@ -5,6 +5,9 @@ import { ConflictException } from '../../../shared/errors/business/ConflictExcep
 import { InvalidOperationException } from '../../../shared/errors/business/InvalidOperationException.js';
 import { NotFoundException } from '../../../shared/errors/business/NotFoundException.js';
 import { InfrastructureException } from '../../../shared/errors/infrastructure/InfrastructureException.js';
+import { UpstreamContractException } from '../../../shared/errors/infrastructure/UpstreamContractException.js';
+import { UpstreamRateLimitedException } from '../../../shared/errors/infrastructure/UpstreamRateLimitedException.js';
+import { UpstreamTimeoutException } from '../../../shared/errors/infrastructure/UpstreamTimeoutException.js';
 import { UnauthorizedException } from '../../../shared/errors/security/UnauthorizedException.js';
 import { ValidationException } from '../../../shared/errors/validation/ValidationException.js';
 import type { NormalizedException, NormalizedExceptionKind } from './NormalizedException.js';
@@ -47,6 +50,9 @@ function getBaseExceptionKind(error: BaseException): NormalizedExceptionKind {
   if (error instanceof InvalidOperationException) return 'INVALID_OPERATION';
   if (error instanceof UnauthorizedException) return 'UNAUTHORIZED';
   if (error instanceof ValidationException) return 'APPLICATION_VALIDATION';
+  if (error instanceof UpstreamTimeoutException) return 'UPSTREAM_TIMEOUT';
+  if (error instanceof UpstreamRateLimitedException) return 'UPSTREAM_RATE_LIMITED';
+  if (error instanceof UpstreamContractException) return 'UPSTREAM_CONTRACT';
   if (error instanceof InfrastructureException) return 'INFRASTRUCTURE';
   if (error instanceof BusinessException) return 'BUSINESS';
 

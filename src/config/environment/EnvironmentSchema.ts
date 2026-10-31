@@ -137,9 +137,89 @@ const serverSchema = {
     .default('info'),
 };
 
+const positiveInt = (name: string, defaultValue: number, max: number) =>
+  z.coerce
+    .number({ error: `${name} debe ser un número` })
+    .int({ error: `${name} debe ser un número entero` })
+    .min(1, { error: `${name} debe ser como mínimo 1` })
+    .max(max, { error: `${name} no puede ser mayor que ${max}` })
+    .default(defaultValue);
+
+const dataSourceModes = ['READ_ONLY_EXISTING_SCHEDULE', 'SYNTHETIC_DEMO_ONLY'] as const;
+
+const predictiveApiSchema = {
+  PREDICTIVE_API_ENABLED: envBoolean(true),
+
+  INTERNAL_API_KEY_SHA256: optionalText.pipe(
+    z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, {
+        error: 'INTERNAL_API_KEY_SHA256 debe ser un SHA-256 hexadecimal en minúsculas',
+      })
+      .optional(),
+  ),
+
+  DATA_SOURCE_MODE: z
+    .enum(dataSourceModes, {
+      error: `DATA_SOURCE_MODE debe ser uno de: ${dataSourceModes.join(', ')}`,
+    })
+    .default('READ_ONLY_EXISTING_SCHEDULE'),
+};
+
+const mlServiceSchema = {
+  ML_SERVICE_URL: z
+    .string({ error: 'ML_SERVICE_URL debe ser una cadena de texto' })
+    .default('http://127.0.0.1:8001'),
+
+  ML_SERVICE_KEY: optionalText.pipe(
+    z
+      .string()
+      .min(32, { error: 'ML_SERVICE_KEY debe tener al menos 32 caracteres' })
+      .max(512, { error: 'ML_SERVICE_KEY no puede superar 512 caracteres' })
+      .regex(/^[\x21-\x7e]+$/, { error: 'ML_SERVICE_KEY debe ser ASCII imprimible sin espacios' })
+      .optional(),
+  ),
+
+  ML_SERVICE_ALLOWED_HOSTS: optionalText,
+  ML_HTTP_TIMEOUT_MS: positiveInt('ML_HTTP_TIMEOUT_MS', 5000, 120000),
+  ML_EXPLAIN_TIMEOUT_MS: positiveInt('ML_EXPLAIN_TIMEOUT_MS', 10000, 120000),
+  ML_MAX_CONCURRENT_REQUESTS: positiveInt('ML_MAX_CONCURRENT_REQUESTS', 2, 32),
+  ML_MAX_CONCURRENT_EXPLANATIONS: positiveInt('ML_MAX_CONCURRENT_EXPLANATIONS', 1, 4),
+  ML_MAX_QUEUED_REQUESTS: positiveInt('ML_MAX_QUEUED_REQUESTS', 8, 256),
+  ML_BATCH_MAX_ITEMS: positiveInt('ML_BATCH_MAX_ITEMS', 32, 64),
+  ML_CIRCUIT_FAILURE_THRESHOLD: positiveInt('ML_CIRCUIT_FAILURE_THRESHOLD', 5, 100),
+  ML_CIRCUIT_COOLDOWN_MS: positiveInt('ML_CIRCUIT_COOLDOWN_MS', 30000, 600000),
+  ML_MODEL_CATALOG_TTL_MS: positiveInt('ML_MODEL_CATALOG_TTL_MS', 60000, 3600000),
+  /** Bandas experimentales v2 (research_risk_v1_1). true ⇒ POST exige política v2 disponible. */
+  ML_RESEARCH_RISK_ENABLED: envBoolean(true),
+  /** Allowlist opcional de hashes de política research aceptados (SHA-256 separados por coma). */
+  ML_RESEARCH_EXPECTED_POLICY_HASHES: optionalText.pipe(
+    z
+      .string()
+      .regex(/^[0-9a-f]{64}(,[0-9a-f]{64})*$/, {
+        error:
+          'ML_RESEARCH_EXPECTED_POLICY_HASHES debe ser una lista de SHA-256 separados por coma',
+      })
+      .optional(),
+  ),
+};
+
+const predictiveStoreSchema = {
+  /**
+   * Archivo SQLite del almacén predictivo local. Por defecto `.local/predictive-store/<modo>.sqlite`
+   * (ignorado por Git). `:memory:` solo para pruebas (no durable).
+   */
+  PREDICTIVE_STORE_SQLITE_PATH: optionalText,
+};
+
 export const EnvironmentSchema = z.object({
   ...postgresSchema,
   ...mysqlSchema,
   ...poolSchema,
   ...serverSchema,
+  ...predictiveApiSchema,
+  ...mlServiceSchema,
+  ...predictiveStoreSchema,
 });
+
+export type EnvironmentVariables = z.infer<typeof EnvironmentSchema>;

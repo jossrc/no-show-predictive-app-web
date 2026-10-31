@@ -276,6 +276,13 @@ try {
 
   if (args === null) {
     console.log(help);
+  } else if (process.env.FLOW_MIGRATION_WRITE_AUTHORIZED !== 'true') {
+    // ADR-006: raw_flow es la réplica fuente de solo lectura; recargarla exige autorización expresa.
+    console.error(
+      'migrate:flow bloqueado: escribe raw_flow en PostgreSQL. Requiere ' +
+        'FLOW_MIGRATION_WRITE_AUTHORIZED=true con autorización expresa del propietario.',
+    );
+    process.exitCode = 2;
   } else {
     await run(args);
   }

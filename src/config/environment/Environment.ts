@@ -10,10 +10,7 @@ if (existsSync('.env')) {
 const result = EnvironmentSchema.safeParse(process.env);
 
 if (!result.success) {
-  console.error(
-    'Configuración del entorno inválida',
-    z.flattenError(result.error).fieldErrors,
-  );
+  console.error('Configuración del entorno inválida', z.flattenError(result.error).fieldErrors);
   throw new Error('Configuración del entorno inválida');
 }
 

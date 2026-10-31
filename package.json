@@ -1,20 +1,34 @@
 {
-  "name": "depi_tracking",
+  "name": "no-show-predictive-app-web",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend Fastify del sistema web predictivo de inasistencias (TESIS 2026-2027) - Sprint 01",
   "main": "dist/index.js",
   "engines": {
     "node": ">=24.20.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=.env dist/index.js",
     "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
     "migrate:flow": "node --env-file-if-exists=.env --import tsx src/app/cli/MigrateFlow.ts",
-    "test": "node --import tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit",
+    "migrate:app": "node --env-file-if-exists=.env --import tsx src/app/cli/MigrateApp.ts",
+    "store:status": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts status",
+    "store:backup": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts backup",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/**/*.test.ts' 'tests/contracts/**/*.test.ts' 'tests/e2e/**/*.test.ts'",
+    "test:unit": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/**/*.test.ts'",
+    "test:contract": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/contracts/**/*.test.ts'",
+    "test:e2e": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/e2e/**/*.test.ts'",
+    "test:integration": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test --test-concurrency=1 'tests/integration/**/*.test.ts'",
+    "test:performance": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test --test-concurrency=1 'tests/performance/**/*.test.ts'",
+    "test:coverage": "node --import tsx --import ./tests/setup/TestEnvironment.ts --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-exclude='src/index.ts' --test-coverage-exclude='src/app/cli/**' --test-coverage-exclude='src/modules/FlowMigration/**' --test-coverage-lines=85 --test-coverage-branches=80 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test 'tests/unit/**/*.test.ts' 'tests/contracts/**/*.test.ts' 'tests/e2e/**/*.test.ts'",
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "test:db:stop": "docker compose -f docker-compose.test.yml stop",
+    "check": "npm run typecheck && npm run format:check && npm test && npm run build",
+    "demo:seed-synthetic": "node --import tsx --import ./tests/setup/TestEnvironment.ts tests/scripts/SeedSyntheticDemo.ts",
+    "test:coverage:all": "node --import tsx --import ./tests/setup/TestEnvironment.ts --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-exclude='src/index.ts' --test-coverage-exclude='src/app/cli/**' --test-coverage-exclude='src/modules/FlowMigration/**' --test-coverage-lines=85 --test-coverage-branches=80 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov-all.info --test --test-concurrency=1 'tests/unit/**/*.test.ts' 'tests/contracts/**/*.test.ts' 'tests/e2e/**/*.test.ts' 'tests/integration/**/*.test.ts'"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +43,8 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
+    "@fastify/swagger": "9.9.2",
+    "@scalar/fastify-api-reference": "1.73.1",
     "ajv": "8.20.0",
     "fastify": "5.12.1",
     "mysql2": "3.24.3",

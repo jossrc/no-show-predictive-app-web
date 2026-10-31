@@ -17,7 +17,14 @@ export function registerCheckMysqlConnectionRoute(
 ): void {
   app.get<CheckMysqlConnectionRoute>(
     '/health/mysql',
-    { schema: CheckDatabaseConnectionSchema },
+    {
+      schema: {
+        ...CheckDatabaseConnectionSchema,
+        summary: 'Consultar disponibilidad de MySQL',
+        description:
+          'Comprobación pública de la conexión opcional MySQL. La ruta permanece registrada y devuelve 200 con status=disabled cuando MySQL no está configurado.',
+      },
+    },
     options.handler.handle,
   );
 }

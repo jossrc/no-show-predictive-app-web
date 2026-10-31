@@ -2,9 +2,14 @@
 # Created by git for backups. To disable backups in Git:
 # $ git config --global mergetool.keepBackup false
 *.orig
+PROMPTS/*
 
 # Created by git when using merge tools for conflicts
-docs/
+# docs/ es material privado; solo se versiona la documentación del Sprint 01 y ADRs.
+docs/*
+!docs/sprint-01/
+!docs/adr/
+!docs/backend-node-final-closeout-*.md
 *.BACKUP.*
 *.BASE.*
 *.LOCAL.*
@@ -789,3 +794,9 @@ FodyWeavers.xsd
 
 docker/postgres/data/
 util-docs/
+# Reportes locales de rendimiento/pruebas (pueden regenerarse)
+reports/
+
+# Almacén predictivo local (SQLite: snapshots con edad/sexo, scores) y sus backups: nunca a Git
+.local/
+data-local/

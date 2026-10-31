@@ -1,0 +1,11 @@
+# Material de especificación y volcados aportados por el propietario: no se reformatean.
+PROMPTS/
+bd/
+# Compose con volumen de datos reales: se preserva tal cual (sin reformateo automático).
+docker-compose.yml
+docker/postgres/data/
+coverage/
+reports/
+dist/
+# Contrato ML anclado por SHA-256: copia byte a byte del repo Python (no reformatear).
+tests/contracts/ml/*.json

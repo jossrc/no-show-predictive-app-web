@@ -1,0 +1,14 @@
+{
+  "_provenance": "SYNTHETIC_FIXTURE: respuesta real de depi-noshow-ml b0e11893 con ML_ENABLE_RESEARCH_RISK=false (reports/risk-policy-closeout-20261011-165943/http_disabled_smoke.json). Sin datos de clientes.",
+  "status": 200,
+  "body": {
+    "api_version": "v2",
+    "status": "UNAVAILABLE",
+    "available": false,
+    "reason": "disabled",
+    "policies": [],
+    "validation_status": "EXPLORATORY_NOT_VALIDATED",
+    "operational_use_allowed": false,
+    "request_id": "7bc8b9c4872e4635bfaa0f60781fc4cb"
+  }
+}
