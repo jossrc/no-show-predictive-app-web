@@ -5,9 +5,10 @@ import { logSequelizeSql } from '../SequelizeLogging.js';
 import { installReadOnlySqlGuard, POSTGRES_READ_ONLY_SESSION_OPTIONS } from './ReadOnlySqlGuard.js';
 
 /**
- * Conexión runtime a la fuente PostgreSQL: SOLO LECTURA por diseño (ADR-006). Sesiones con
- * `default_transaction_read_only=on` y guard de sentencias: ninguna escritura (snapshots,
- * scores, migraciones) puede viajar por esta conexión; el almacén predictivo es local.
+ * Conexión runtime a la FUENTE PostgreSQL (raw_flow/analytics): SOLO LECTURA por diseño (ADR-006,
+ * vigente en ADR-008). Sesiones con `default_transaction_read_only=on` y guard de sentencias:
+ * ninguna escritura puede viajar por esta conexión. Las escrituras propias (snapshots, scores,
+ * registros HU-06/07/08) usan OTRA conexión con rol restringido (PredictiveAppDatabase).
  */
 export const postgresSequelize = installReadOnlySqlGuard(
   new Sequelize(

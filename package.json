@@ -1,7 +1,7 @@
 {
   "name": "no-show-predictive-app-web",
   "version": "1.0.0",
-  "description": "Backend Fastify del sistema web predictivo de inasistencias (TESIS 2026-2027) - Sprint 01",
+  "description": "Backend Fastify del sistema web predictivo de inasistencias (TESIS 2026-2027) - Sprint 01/02",
   "main": "dist/index.js",
   "engines": {
     "node": ">=24.20.0"
@@ -12,8 +12,9 @@
     "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
     "migrate:flow": "node --env-file-if-exists=.env --import tsx src/app/cli/MigrateFlow.ts",
     "migrate:app": "node --env-file-if-exists=.env --import tsx src/app/cli/MigrateApp.ts",
-    "store:status": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts status",
-    "store:backup": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts backup",
+    "store:migrate": "node --env-file-if-exists=.env --import tsx src/app/cli/MigratePredictiveStore.ts",
+    "store:status": "node --env-file-if-exists=.env --import tsx src/app/cli/PredictiveStore.ts",
+    "store:import-legacy": "node --env-file-if-exists=.env --import tsx src/app/cli/ImportLegacySqliteStore.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

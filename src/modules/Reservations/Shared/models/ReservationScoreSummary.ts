@@ -1,5 +1,6 @@
 import type { MlModelKey } from '../../../../infrastructure/http/ml/MlFeatureContract.js';
 import type { Reservation } from './Reservation.js';
+import type { ReservationOperationalStatus } from './ReservationOperationalStatus.js';
 
 export const EXPERIMENTAL_RISK_LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
 export type ExperimentalRiskLevel = (typeof EXPERIMENTAL_RISK_LEVELS)[number];
@@ -31,4 +32,6 @@ export interface ReservationWithScores {
   readonly scores: readonly ReservationScoreSummary[];
   /** Existe snapshot booking_creation utilizable en el modo de datos activo. */
   readonly hasUsableSnapshot: boolean;
+  /** Registros de gestión Sprint 02; null solo si el almacén de la app no está disponible. */
+  readonly operationalStatus: ReservationOperationalStatus | null;
 }

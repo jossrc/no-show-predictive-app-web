@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { SequelizeHealthCheck } from '../infrastructure/database/sequelize/SequelizeHealthCheck.js';
 import { createClientHistoryModule } from '../modules/ClientHistory/ClientHistoryModule.js';
 import { createHealthModule } from '../modules/Health/HealthModule.js';
+import { createOperationalOptimizationModule } from '../modules/OperationalOptimization/OperationalOptimizationModule.js';
 import { createPredictionModelsModule } from '../modules/PredictionModels/PredictionModelsModule.js';
 import { createReservationRiskModule } from '../modules/ReservationRisk/ReservationRiskModule.js';
 import { createReservationsModule } from '../modules/Reservations/ReservationsModule.js';
@@ -62,6 +63,17 @@ export function registerModules(app: FastifyInstance, options: RegisterModulesOp
               modelCatalog: deps.modelCatalog,
               policy: deps.policy,
               research: deps.research,
+            }),
+          );
+          await secured.register(
+            createOperationalOptimizationModule({
+              reservations: deps.reservations,
+              scores: deps.scores,
+              runs: deps.runs,
+              evidenceSource: deps.evidenceSource,
+              operations: deps.operations,
+              mode: deps.mode,
+              clock: deps.clock,
             }),
           );
         },

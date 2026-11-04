@@ -204,12 +204,30 @@ const mlServiceSchema = {
   ),
 };
 
+/**
+ * Almacén predictivo PostgreSQL PROPIO de la app (ADR-008): conexión separada de la fuente de
+ * solo lectura (DB_*_POSTGRES), con un rol runtime restringido (SELECT/INSERT en ml.app_*).
+ * Obligatorio cuando las rutas de negocio están habilitadas; sin valores por defecto embebidos.
+ */
 const predictiveStoreSchema = {
+  APP_DB_HOST_POSTGRES: optionalText,
+  APP_DB_PORT_POSTGRES: z.coerce
+    .number({ error: 'APP_DB_PORT_POSTGRES debe ser un número' })
+    .int({ error: 'APP_DB_PORT_POSTGRES debe ser un número entero' })
+    .min(1, { error: 'APP_DB_PORT_POSTGRES debe ser como mínimo 1' })
+    .max(65535, { error: 'APP_DB_PORT_POSTGRES no puede ser mayor que 65535' })
+    .default(5432),
+  APP_DB_NAME_POSTGRES: optionalText,
+  APP_DB_USER_POSTGRES: optionalText,
+  APP_DB_PASS_POSTGRES: z
+    .string({ error: 'APP_DB_PASS_POSTGRES debe ser una cadena de texto' })
+    .default(''),
+  APP_DB_STATEMENT_TIMEOUT_MS: positiveInt('APP_DB_STATEMENT_TIMEOUT_MS', 5000, 60000),
   /**
-   * Archivo SQLite del almacén predictivo local. Por defecto `.local/predictive-store/<modo>.sqlite`
-   * (ignorado por Git). `:memory:` solo para pruebas (no durable).
+   * Solo desarrollo local sin roles aprovisionados: permite un rol superusuario/propietario.
+   * Rechazado en production. El runtime informa restrictedRole=false en /health/predictive-store.
    */
-  PREDICTIVE_STORE_SQLITE_PATH: optionalText,
+  APP_DB_ALLOW_PRIVILEGED_ROLE: envBoolean(false),
 };
 
 export const EnvironmentSchema = z.object({

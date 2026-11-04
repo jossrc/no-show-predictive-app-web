@@ -12,6 +12,7 @@ import type {
 } from '../../src/modules/Reservations/Shared/persistence/ReservationSource.js';
 import { ScoredReservationRepository } from '../../src/modules/Reservations/Shared/persistence/ScoredReservationRepository.js';
 import type { SnapshotEvidenceSource } from '../../src/shared/data/DataSourceMode.js';
+import { InMemoryOperationalStore } from './InMemoryOperationalStore.js';
 import type { InMemoryPredictiveStore } from './InMemoryPredictiveStore.js';
 
 function compareChronological(left: Reservation, right: Reservation): number {
@@ -79,8 +80,11 @@ export class InMemoryReservationRepository implements ReservationRepository {
   failWith: Error | null = null;
   private readonly scored: ScoredReservationRepository;
 
-  constructor(store: InMemoryPredictiveStore) {
-    this.scored = new ScoredReservationRepository(this.source, store);
+  constructor(
+    store: InMemoryPredictiveStore,
+    operations: InMemoryOperationalStore = new InMemoryOperationalStore(),
+  ) {
+    this.scored = new ScoredReservationRepository(this.source, store, operations);
   }
 
   add(...reservations: Reservation[]): void {

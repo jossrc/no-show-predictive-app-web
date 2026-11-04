@@ -1,3 +1,4 @@
+import type { OperationalStatusBody } from '../../../../../Reservations/Shared/http/OperationalStatusHttp.js';
 import type {
   ReservationBody,
   ScoreSummaryBody,
@@ -5,7 +6,7 @@ import type {
 import type { ExperimentalRiskSummary } from '../../../../../Reservations/Shared/models/ReservationScoreSummary.js';
 import type { NotScorableReason } from '../../../../Shared/models/NotScorableReason.js';
 
-export interface ListReservationRisksItemBody extends ReservationBody {
+export interface ListReservationRisksItemBody extends ReservationBody, OperationalStatusBody {
   risk: {
     predictionAvailability: 'AVAILABLE_EXPLORATORY' | 'NOT_SCORED' | 'NOT_SCORABLE';
     notScorableReasons: NotScorableReason[];

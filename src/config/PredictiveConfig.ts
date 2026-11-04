@@ -1,12 +1,11 @@
 import type { EnvironmentVariables } from './environment/EnvironmentSchema.js';
+import type { PredictiveAppDatabaseConfig } from '../infrastructure/database/postgres/PredictiveAppDatabase.js';
 import type { DataSourceMode } from '../shared/data/DataSourceMode.js';
 import { AUTH_LIMITATION_CODE } from '../shared/security/RequestPrincipal.js';
 import {
   parseAllowedHosts,
   resolveMlServiceBaseUrl,
 } from '../infrastructure/http/ml/MlServiceUrl.js';
-
-const DEFAULT_STORE_DIRECTORY = '.local/predictive-store';
 
 export interface PredictiveApiConfig {
   readonly enabled: boolean;
@@ -33,9 +32,11 @@ export interface MlServiceConfig {
 }
 
 export interface PredictiveStoreConfig {
-  readonly driver: 'sqlite';
-  /** Ruta del archivo SQLite local (o `:memory:` en pruebas). */
-  readonly sqlitePath: string;
+  readonly driver: 'postgresql';
+  /** Conexión del almacén propio (ml.app_*); null solo si las rutas de negocio no se registran. */
+  readonly database: PredictiveAppDatabaseConfig | null;
+  /** Rol superusuario/propietario tolerado (solo desarrollo local; nunca production). */
+  readonly allowPrivilegedRole: boolean;
 }
 
 export interface PredictiveConfig {
@@ -76,8 +77,8 @@ function resolveApiConfig(env: EnvironmentVariables): PredictiveApiConfig {
 
 /**
  * SYNTHETIC_DEMO_ONLY obtiene reservas, evidencia e historial EXCLUSIVAMENTE del dataset
- * sintético versionado y persiste en su propio archivo SQLite: no lee ni escribe datos de
- * negocio en PostgreSQL (solo /health/postgres). Prohibido en production.
+ * sintético versionado (sin lecturas de negocio a la fuente PostgreSQL) y persiste en un almacén
+ * PostgreSQL ligado a ese modo (otra base). Prohibido en production.
  */
 function resolveDataSourceMode(env: EnvironmentVariables): DataSourceMode {
   if (env.DATA_SOURCE_MODE === 'SYNTHETIC_DEMO_ONLY' && env.NODE_ENV === 'production') {
@@ -86,22 +87,64 @@ function resolveDataSourceMode(env: EnvironmentVariables): DataSourceMode {
   return env.DATA_SOURCE_MODE;
 }
 
-/** Un archivo por modo: un almacén sintético nunca comparte archivo con el real. */
+/**
+ * Almacén predictivo PostgreSQL de la app (ADR-008). Con rutas de negocio habilitadas las
+ * credenciales APP_DB_* son obligatorias (fallo al arrancar, sin fallback a SQLite ni memoria) y
+ * el rol debe ser distinto del de la fuente de solo lectura salvo excepción local explícita.
+ */
 function resolveStoreConfig(
   env: EnvironmentVariables,
-  mode: DataSourceMode,
+  api: PredictiveApiConfig,
 ): PredictiveStoreConfig {
+  const allowPrivilegedRole = env.APP_DB_ALLOW_PRIVILEGED_ROLE;
+  if (allowPrivilegedRole && env.NODE_ENV === 'production') {
+    throw new Error('APP_DB_ALLOW_PRIVILEGED_ROLE=true no está permitido en production');
+  }
+  if (!api.enabled) return { driver: 'postgresql', database: null, allowPrivilegedRole };
+  return { driver: 'postgresql', allowPrivilegedRole, database: resolveAppDatabaseConfig(env) };
+}
+
+/**
+ * Conexión del almacén de la app desde APP_DB_* (también para las CLIs store:*). Lanza si faltan
+ * credenciales o si el rol coincide con el de la fuente de solo lectura sin excepción explícita.
+ */
+export function resolveAppDatabaseConfig(env: EnvironmentVariables): PredictiveAppDatabaseConfig {
+  const missing = (
+    [
+      ['APP_DB_HOST_POSTGRES', env.APP_DB_HOST_POSTGRES],
+      ['APP_DB_NAME_POSTGRES', env.APP_DB_NAME_POSTGRES],
+      ['APP_DB_USER_POSTGRES', env.APP_DB_USER_POSTGRES],
+    ] as const
+  )
+    .filter(([, value]) => value === undefined)
+    .map(([name]) => name);
+  if (missing.length > 0) {
+    throw new Error(`Almacén predictivo PostgreSQL sin configurar: ${missing.join(', ')}`);
+  }
+  if (env.APP_DB_USER_POSTGRES === env.DB_USER_POSTGRES && !env.APP_DB_ALLOW_PRIVILEGED_ROLE) {
+    throw new Error(
+      'APP_DB_USER_POSTGRES debe ser un rol distinto del de la fuente de solo lectura (DB_USER_POSTGRES)',
+    );
+  }
+
   return {
-    driver: 'sqlite',
-    sqlitePath:
-      env.PREDICTIVE_STORE_SQLITE_PATH ?? `${DEFAULT_STORE_DIRECTORY}/${mode.toLowerCase()}.sqlite`,
+    host: env.APP_DB_HOST_POSTGRES as string,
+    port: env.APP_DB_PORT_POSTGRES,
+    database: env.APP_DB_NAME_POSTGRES as string,
+    user: env.APP_DB_USER_POSTGRES as string,
+    password: env.APP_DB_PASS_POSTGRES,
+    poolMax: env.DATABASE_POOL_MAX,
+    connectionTimeoutMs: env.DATABASE_CONNECTION_TIMEOUT_MS,
+    idleTimeoutMs: env.DATABASE_IDLE_TIMEOUT_MS,
+    statementTimeoutMs: env.APP_DB_STATEMENT_TIMEOUT_MS,
   };
 }
 
 export function createPredictiveConfig(env: EnvironmentVariables): PredictiveConfig {
   const dataSourceMode = resolveDataSourceMode(env);
+  const api = resolveApiConfig(env);
   return {
-    api: resolveApiConfig(env),
+    api,
     dataSourceMode,
     ml: {
       baseUrl: resolveMlServiceBaseUrl(env.ML_SERVICE_URL, {
@@ -121,7 +164,7 @@ export function createPredictiveConfig(env: EnvironmentVariables): PredictiveCon
       researchRiskEnabled: env.ML_RESEARCH_RISK_ENABLED,
       expectedResearchPolicyHashes: env.ML_RESEARCH_EXPECTED_POLICY_HASHES?.split(',') ?? [],
     },
-    store: resolveStoreConfig(env, dataSourceMode),
+    store: resolveStoreConfig(env, api),
     sourceStatementTimeoutMs: 10_000,
   };
 }

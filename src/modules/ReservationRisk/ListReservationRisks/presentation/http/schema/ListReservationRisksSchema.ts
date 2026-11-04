@@ -13,7 +13,7 @@ export const ListReservationRisksSchema = {
   tags: ['Reservations'],
   summary: 'Listar reservas y scores exploratorios',
   description:
-    'Consulta reservas por fechas del calendario America/Lima (fuente PostgreSQL de solo lectura) con los scores del almacén predictivo local, paginación keyset y cursor opaco. Ordenar por probabilityNoShow es un orden por score exploratorio, no una política operativa aprobada. Los modelos son independientes, sin ensemble ni ganador automático. Riesgo OPERATIVO: filtrar u ordenar por riskLevel devuelve 409 RISK_POLICY_UNAVAILABLE mientras no exista una política aprobada. Banda EXPERIMENTAL (research_risk_v1_1 de Python v2): experimentalRiskLevel=LOW|MEDIUM|HIGH filtra y sort=experimentalRisk ordena según el modelo elegido (modelKey) y la política vigente indicada en experimentalRiskPolicy; nunca se combinan RF y XGB. Las bandas son terciles relativos del score, no probabilidades ni autorización de acciones (operationalUseAllowed=false).',
+    'Consulta reservas por fechas del calendario America/Lima (fuente PostgreSQL de solo lectura) con los scores del almacén predictivo PostgreSQL de la app (ml.app_*), paginación keyset y cursor opaco. Ordenar por probabilityNoShow es un orden por score exploratorio, no una política operativa aprobada. Los modelos son independientes, sin ensemble ni ganador automático. Riesgo OPERATIVO: filtrar u ordenar por riskLevel devuelve 409 RISK_POLICY_UNAVAILABLE mientras no exista una política aprobada. Banda EXPERIMENTAL (research_risk_v1_1 de Python v2): experimentalRiskLevel=LOW|MEDIUM|HIGH filtra y sort=experimentalRisk ordena según el modelo elegido (modelKey) y la política vigente indicada en experimentalRiskPolicy; nunca se combinan RF y XGB. Las bandas son terciles relativos del score, no probabilidades ni autorización de acciones (operationalUseAllowed=false). Sprint 02 (aditivo): cada fila incluye overbooking, attendanceOutcome y spaceRecoveryOutcome (registros de gestión propios, leídos por lote sin N+1).',
   security: [{ InternalApiKey: [] }],
   querystring: {
     type: 'object',
@@ -203,7 +203,7 @@ export const ListReservationRisksSchema = {
     503: {
       ...ErrorResponseSchema,
       description:
-        'SOURCE_DATA_UNAVAILABLE: fuente de reservas no disponible; PERSISTENCE_UNAVAILABLE: almacén local no disponible.',
+        'SOURCE_DATA_UNAVAILABLE: fuente de reservas no disponible; PERSISTENCE_UNAVAILABLE: almacén PostgreSQL de la app no disponible.',
     },
   },
 } as const satisfies FastifySchema;

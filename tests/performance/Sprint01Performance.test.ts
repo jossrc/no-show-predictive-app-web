@@ -8,14 +8,17 @@ import type pg from 'pg';
 import pino from 'pino';
 import type { Sequelize } from 'sequelize-typescript';
 import { buildApp } from '../../src/app/BuildApp.js';
-import { DatabaseSync } from 'node:sqlite';
 import { createMlPredictionClient } from '../../src/app/CreatePredictiveDependencies.js';
 import { EnvironmentSchema } from '../../src/config/environment/EnvironmentSchema.js';
 import { createPredictiveConfig } from '../../src/config/PredictiveConfig.js';
 import type { MlCompareRequest } from '../../src/infrastructure/http/ml/MlContractTypes.js';
 import type { MlPredictionClient } from '../../src/infrastructure/http/ml/MlPredictionClient.js';
 import { SequelizeClientHistoryRepository } from '../../src/modules/ClientHistory/Shared/persistence/sequelize/SequelizeClientHistoryRepository.js';
-import { SqlitePredictiveStore } from '../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { PostgresPredictiveStore } from '../../src/modules/ReservationRisk/Shared/persistence/postgres/PostgresPredictiveStore.js';
+import {
+  createIsolatedStoreDatabase,
+  type IsolatedStoreDatabase,
+} from '../helpers/PredictiveStoreTestDatabase.js';
 import { buildReservationListQuery } from '../../src/modules/Reservations/Shared/persistence/sequelize/ReservationSql.js';
 import { pgTestDbDependencies } from '../helpers/PgTestDbDependencies.js';
 import { sha256Hex } from '../../src/shared/security/VerifyInternalApiKey.js';
@@ -81,9 +84,10 @@ async function measure(
 
 /**
  * Inserta N reservas FUTURE sintéticas en la réplica de PRUEBA (generate_series) y, en el
- * almacén SQLite local, snapshots + scores RF/XGB para la mitad (como en runtime).
+ * almacén PostgreSQL de la app (base de prueba aislada), snapshots + scores RF/XGB para la mitad
+ * (como en runtime). Inserción por conjuntos: sin bucles fila a fila.
  */
-async function seedVolume(client: pg.Client, local: DatabaseSync, total: number): Promise<void> {
+async function seedVolume(client: pg.Client, local: pg.Client, total: number): Promise<void> {
   await client.query('TRUNCATE analytics.appointment_outcomes');
   await client.query(
     `INSERT INTO analytics.appointment_outcomes (appointment_id, client_id, clinic_id, appointment_at, created_at_source,
@@ -96,51 +100,41 @@ async function seedVolume(client: pg.Client, local: DatabaseSync, total: number)
   );
   await client.query('ANALYZE analytics.appointment_outcomes');
 
-  // Volumen aislado por iteración: almacén local nuevo (los triggers impiden borrar filas).
-  local.exec('BEGIN IMMEDIATE');
-  const snapshot = local.prepare(`INSERT INTO booking_feature_snapshots (reservation_id, client_id,
-      snapshot_type, prediction_at, appointment_at, feature_version, builder_version, snapshot_hash,
-      features_json, evidence_source, evidence_json, created_at)
-    VALUES (?, ?, 'booking_creation', '2026-10-01T13:00:00.000Z', '2026-11-01T13:00:00.000Z',
-      'BOOKING_BASELINE_V1', 'risk_features_builder_v1', ?, '{}', 'SYNTHETIC_DEMO_ONLY', '{}', ?)
-    RETURNING snapshot_id`);
-  const run =
-    local.prepare(`INSERT INTO prediction_runs (run_uid, snapshot_id, reservation_id, mode,
-      requested_model_keys_json, scoring_api_version, request_id, run_requested_at, completed_at, ml_latency_ms)
-    VALUES (?, ?, ?, 'compare', '[]', 'v1', 'perf', ?, ?, 10) RETURNING run_id`);
-  const result =
-    local.prepare(`INSERT INTO prediction_model_results (run_id, snapshot_id, reservation_id,
-      model_key, algorithm, model_version, model_hash, feature_version, prediction_at, scored_at,
-      probability_no_show, prediction_target, validation_status, calibration_status,
-      operational_use_allowed, risk_policy_status, scoring_api_version)
-    VALUES (?, ?, ?, ?, ?, ?, 'abc123def456', 'BOOKING_BASELINE_V1', ?, ?, ?, 'NO_SHOW_CANDIDATE',
-      'EXPLORATORY_NOT_VALIDATED', 'not_operationally_validated', 0, 'pending_validation', 'v1')`);
-  const now = new Date().toISOString();
-  for (let g = 2; g <= total; g += 2) {
-    const id = String(800000000000000 + g);
-    const hash = `${String(g).padStart(64, '0')}`;
-    const snapshotId = Number(
-      snapshot.get(id, String(810000000000000 + (g % 5000)), hash, now)?.snapshot_id,
-    );
-    const runId = Number(run.get(crypto.randomUUID(), snapshotId, id, now, now)?.run_id);
-    for (const [key, alg] of [
-      ['random_forest_full_v1', 'random_forest'],
-      ['xgboost_full_v1', 'xgboost'],
-    ]) {
-      result.run(
-        runId,
-        snapshotId,
-        id,
-        key!,
-        alg!,
-        `${key}:abc123def456`,
-        now,
-        now,
-        ((g * 7919) % 1000) / 1000,
-      );
-    }
-  }
-  local.exec('COMMIT');
+  // Volumen aislado por iteración: base de almacén nueva (los triggers impiden borrar filas).
+  await local.query(
+    `INSERT INTO ml.app_booking_feature_snapshots (reservation_id, client_id, snapshot_type,
+       prediction_at, appointment_at, feature_version, builder_version, snapshot_hash, features,
+       evidence_source, evidence, created_at)
+     SELECT 800000000000000 + g, 810000000000000 + (g % 5000), 'booking_creation',
+            '2026-10-01T13:00:00Z', '2026-11-01T13:00:00Z', 'BOOKING_BASELINE_V1',
+            'risk_features_builder_v1', lpad(g::text, 64, '0'), '{}'::jsonb,
+            'SYNTHETIC_DEMO_ONLY', '{}'::jsonb, now()
+     FROM generate_series(2, $1::int, 2) g`,
+    [total],
+  );
+  await local.query(
+    `INSERT INTO ml.app_prediction_runs (run_uid, snapshot_id, reservation_id, mode,
+       requested_model_keys, scoring_api_version, request_id, run_requested_at, completed_at,
+       ml_latency_ms)
+     SELECT gen_random_uuid(), s.snapshot_id, s.reservation_id, 'compare',
+            ARRAY['random_forest_full_v1', 'xgboost_full_v1'], 'v1', 'perf', now(), now(), 10
+     FROM ml.app_booking_feature_snapshots s`,
+  );
+  await local.query(
+    `INSERT INTO ml.app_prediction_model_results (run_id, snapshot_id, reservation_id, model_key,
+       algorithm, model_version, model_hash, feature_version, prediction_at, scored_at,
+       probability_no_show, prediction_target, validation_status, calibration_status,
+       operational_use_allowed, risk_policy_status, scoring_api_version, research_policy_key)
+     SELECT r.run_id, r.snapshot_id, r.reservation_id, m.model_key, m.algorithm,
+            m.model_key || ':abc123def456', 'abc123def456', 'BOOKING_BASELINE_V1', now(), now(),
+            (((r.reservation_id - 800000000000000) * 7919) % 1000) / 1000.0, 'NO_SHOW_CANDIDATE',
+            'EXPLORATORY_NOT_VALIDATED', 'not_operationally_validated', false,
+            'pending_validation', 'v1', ''
+     FROM ml.app_prediction_runs r
+     CROSS JOIN (VALUES ('random_forest_full_v1', 'random_forest'), ('xgboost_full_v1', 'xgboost'))
+       AS m(model_key, algorithm)`,
+  );
+  await local.query('ANALYZE ml.app_prediction_model_results');
 }
 
 async function seedHistory(client: pg.Client, clientId: string, events: number): Promise<void> {
@@ -161,8 +155,9 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
   let sequelize: Sequelize;
   let app: FastifyInstance;
   let statementCount = 0;
-  let store: SqlitePredictiveStore;
-  let local: DatabaseSync;
+  let store: PostgresPredictiveStore | undefined;
+  let storeDatabase: IsolatedStoreDatabase | undefined;
+  let local: pg.Client | undefined;
   let config: ReturnType<typeof createPredictiveConfig>;
   const report: Record<string, unknown> = {
     generatedAt: new Date().toISOString(),
@@ -193,14 +188,22 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
     );
   });
 
-  /** App nueva por volumen, con su propio almacén SQLite (archivo temporal) sembrado. */
+  async function closeStore(): Promise<void> {
+    await local?.end();
+    await store?.close();
+    await storeDatabase?.drop();
+  }
+
+  /** App nueva por volumen, con su propia base de almacén PostgreSQL de prueba sembrada. */
   async function appForVolume(volume: number): Promise<void> {
     await app?.close();
-    store?.close();
-    local?.close();
-    const file = path.join(os.tmpdir(), `nsp-perf-${process.pid}-${volume}-${Date.now()}.sqlite`);
-    store = SqlitePredictiveStore.open({ path: file, mode: 'SYNTHETIC_DEMO_ONLY' });
-    local = new DatabaseSync(file);
+    await closeStore();
+    storeDatabase = await createIsolatedStoreDatabase('SYNTHETIC_DEMO_ONLY');
+    store = await PostgresPredictiveStore.open(storeDatabase.runtime, {
+      mode: 'SYNTHETIC_DEMO_ONLY',
+      allowPrivilegedRole: false,
+    });
+    local = await storeDatabase.connect('admin');
     await seedVolume(client, local, volume);
     app = buildApp({
       postgresHealthCheck: healthyCheck,
@@ -209,7 +212,7 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
       predictiveApi: {
         internalApiKeySha256: sha256Hex(TEST_INTERNAL_API_KEY),
         dependencies: {
-          ...pgTestDbDependencies(config, sequelize, new FakePredictionClient(), store),
+          ...pgTestDbDependencies(config, sequelize, new FakePredictionClient(), store!),
           clock: new FixedClock(new Date('2026-10-25T00:00:00Z')),
         },
       },
@@ -218,8 +221,7 @@ describe('Benchmark Sprint 01 (laboratorio, datos sintéticos)', { skip: skip ??
 
   after(async () => {
     await app?.close();
-    store?.close();
-    local?.close();
+    await closeStore();
     await sequelize?.close();
     await client?.end();
     const directory = path.join(path.resolve(fixturePath('.'), '..'), 'reports/performance');

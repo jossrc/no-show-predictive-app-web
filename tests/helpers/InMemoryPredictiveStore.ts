@@ -15,6 +15,7 @@ import type {
   PredictionResultRepository,
   SavePredictionRunOutcome,
 } from '../../src/modules/ReservationRisk/Shared/persistence/PredictionResultRepository.js';
+import type { PredictionRunReader } from '../../src/modules/ReservationRisk/Shared/persistence/PredictionRunReader.js';
 import type { ReservationScoreSummary } from '../../src/modules/Reservations/Shared/models/ReservationScoreSummary.js';
 import type {
   ExperimentalPolicyIdentity,
@@ -27,12 +28,16 @@ const policyKey = (score: { experimentalRisk: { policyHash: string } | null }) =
   score.experimentalRisk?.policyHash ?? '';
 
 /**
- * Almacén predictivo en memoria con las mismas reglas UNIQUE/inmutabilidad que el SQLite local
- * (incluida la identidad por política research). Las pruebas de integración SQLite verifican la
- * misma semántica sobre el adaptador real.
+ * Almacén predictivo en memoria con las mismas reglas UNIQUE/inmutabilidad que el almacén
+ * PostgreSQL ml.app_* (incluida la identidad por política research). Las pruebas de integración
+ * PostgreSQL verifican la misma semántica sobre el adaptador real.
  */
 export class InMemoryPredictiveStore
-  implements BookingSnapshotRepository, PredictionResultRepository, ReservationScoreReader
+  implements
+    BookingSnapshotRepository,
+    PredictionResultRepository,
+    PredictionRunReader,
+    ReservationScoreReader
 {
   readonly snapshots: BookingFeatureSnapshot[] = [];
   readonly runs: NewPredictionRun[] = [];
@@ -138,6 +143,21 @@ export class InMemoryPredictiveStore
         })),
       ),
     };
+  }
+
+  async findRunResults(
+    reservationId: string,
+    predictionRunId: string,
+    evidence: SnapshotEvidenceSource,
+  ): Promise<readonly ModelScore[]> {
+    const snapshotIds = new Set(
+      this.snapshots
+        .filter((s) => s.reservationId === reservationId && s.evidenceSource === evidence)
+        .map((s) => s.snapshotId),
+    );
+    return this.results
+      .filter((r) => r.predictionRunId === predictionRunId && snapshotIds.has(r.snapshotId))
+      .sort((a, b) => a.modelKey.localeCompare(b.modelKey));
   }
 
   latestScoresForReservation(

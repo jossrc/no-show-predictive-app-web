@@ -8,6 +8,7 @@ PROMPTS/*
 # docs/ es material privado; solo se versiona la documentación del Sprint 01 y ADRs.
 docs/*
 !docs/sprint-01/
+!docs/sprint-02/
 !docs/adr/
 !docs/backend-node-final-closeout-*.md
 *.BACKUP.*
@@ -797,6 +798,7 @@ util-docs/
 # Reportes locales de rendimiento/pruebas (pueden regenerarse)
 reports/
 
-# Almacén predictivo local (SQLite: snapshots con edad/sexo, scores) y sus backups: nunca a Git
+# Histórico del almacén SQLite de Sprint 01 (snapshots con edad/sexo) y sus respaldos: nunca a Git.
+# Se conservan como material histórico (ADR-008); el runtime ya no los usa.
 .local/
 data-local/

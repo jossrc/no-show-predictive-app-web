@@ -4,7 +4,8 @@ import type pg from 'pg';
 import { QueryTypes } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import { runInReadOnlySnapshot } from '../../../../src/infrastructure/database/sequelize/postgres/RunInReadOnlySnapshot.js';
-import { SqlitePredictiveStore } from '../../../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { PostgresOperationalStatusReader } from '../../../../src/modules/OperationalOptimization/Shared/persistence/postgres/PostgresOperationalStatusReader.js';
+import { PostgresPredictiveStore } from '../../../../src/modules/ReservationRisk/Shared/persistence/postgres/PostgresPredictiveStore.js';
 import type { ReservationListCriteria } from '../../../../src/modules/Reservations/Shared/persistence/ReservationRepository.js';
 import { ScoredReservationRepository } from '../../../../src/modules/Reservations/Shared/persistence/ScoredReservationRepository.js';
 import { SequelizeReservationRepository } from '../../../../src/modules/Reservations/Shared/persistence/sequelize/SequelizeReservationRepository.js';
@@ -21,6 +22,10 @@ import {
   resetTestDatabase,
 } from '../../../helpers/TestDatabase.js';
 import { reportSkipped } from '../../../helpers/ReportSkipped.js';
+import {
+  createIsolatedStoreDatabase,
+  type IsolatedStoreDatabase,
+} from '../../../helpers/PredictiveStoreTestDatabase.js';
 
 const skip = await probeTestDatabase();
 const november = limaDayRangeToInstants(
@@ -48,7 +53,7 @@ function criteria(overrides: Partial<ReservationListCriteria> = {}): Reservation
 }
 
 async function scoreReservation(
-  store: SqlitePredictiveStore,
+  store: PostgresPredictiveStore,
   reservationId: string,
   probability: number,
 ): Promise<void> {
@@ -103,14 +108,16 @@ async function scoreReservation(
 }
 
 /**
- * Fuente PostgreSQL (BD de PRUEBA) compuesta con el almacén SQLite local, igual que en runtime:
- * filtros/orden de negocio en SQL de solo lectura, scores desde el almacén local.
+ * Fuente PostgreSQL (BD de PRUEBA) compuesta con el almacén PostgreSQL de la app (otra base
+ * aislada, rol runtime restringido), igual que en runtime: filtros/orden de negocio en SQL de solo
+ * lectura por la conexión fuente, scores por la conexión propia de la app.
  */
 describe('SequelizeReservationRepository (SQL real, BD de prueba)', { skip: skip ?? false }, () => {
   let sequelize: Sequelize;
   let client: pg.Client;
   let repository: ScoredReservationRepository;
-  const store = SqlitePredictiveStore.open({ path: ':memory:', mode: 'SYNTHETIC_DEMO_ONLY' });
+  let storeDatabase: IsolatedStoreDatabase;
+  let store: PostgresPredictiveStore;
   const statements: string[] = [];
 
   before(async () => {
@@ -118,13 +125,20 @@ describe('SequelizeReservationRepository (SQL real, BD de prueba)', { skip: skip
     client = await connectPg();
     await seedReservationScenario(client);
     sequelize = createTestSequelize({ logging: (sql) => void statements.push(sql) });
+    storeDatabase = await createIsolatedStoreDatabase('SYNTHETIC_DEMO_ONLY');
+    store = await PostgresPredictiveStore.open(storeDatabase.runtime, {
+      mode: 'SYNTHETIC_DEMO_ONLY',
+      allowPrivilegedRole: false,
+    });
     repository = new ScoredReservationRepository(
       new SequelizeReservationRepository(sequelize, 5000),
       store.scores,
+      new PostgresOperationalStatusReader(store.database),
     );
   });
   after(async () => {
-    store.close();
+    await store?.close();
+    await storeDatabase?.drop();
     await sequelize?.close();
     await client?.end();
   });

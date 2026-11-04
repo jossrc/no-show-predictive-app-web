@@ -29,8 +29,8 @@ export interface ExperimentalPolicyIdentity {
 }
 
 /**
- * Lectura del almacén predictivo LOCAL (snapshots y scores persistidos por POST explícitos).
- * Nunca llama a Python ni consulta PostgreSQL.
+ * Lectura del almacén predictivo PostgreSQL de la app (snapshots y scores persistidos por POST
+ * explícitos). Nunca llama a Python ni consulta las tablas fuente raw_flow/analytics.
  */
 export interface ReservationScoreReader {
   isAvailable(): Promise<boolean>;

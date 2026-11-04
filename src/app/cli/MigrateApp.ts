@@ -22,9 +22,10 @@ const HELP = `Uso: npm run migrate:app -- [--dry-run] [--down --confirm-database
 
 Solo afecta al schema propio "ml". Nunca modifica raw_flow ni analytics.
 
-BLOQUEADO POR DEFECTO (ADR-006): la fuente PostgreSQL es de solo lectura y el almacén predictivo
-es SQLite local. Aplicar o revertir exige ML_SCHEMA_WRITE_AUTHORIZED=true, una autorización
-expresa y separada del propietario de la base; --dry-run usa una sesión de solo lectura.`;
+OBSOLETO (ADR-008): la migración 001 de este runner heredado solo soporta scores v1 y admite down.
+El almacén predictivo vigente se crea con \`npm run store:migrate\` (migrations/postgres/predictive_app,
+solo up). Aplicar o revertir aquí exige ML_SCHEMA_WRITE_AUTHORIZED=true, una autorización expresa y
+separada del propietario de la base; --dry-run usa una sesión de solo lectura.`;
 
 /** Autorización expresa para escribir el schema ml; nunca se activa desde .env.example. */
 function writeAuthorized(): boolean {

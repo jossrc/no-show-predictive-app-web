@@ -29,16 +29,18 @@ if (!predictiveConfig.api.enabled) {
 
 const businessRoutesEnabled =
   predictiveConfig.api.enabled && predictiveConfig.api.internalApiKeySha256 !== null;
-// Almacén local (SQLite): se abre y migra al arrancar; un archivo de otro modo o corrupto aborta.
-const predictiveStore = businessRoutesEnabled ? openPredictiveStore(predictiveConfig) : null;
+// Almacén PostgreSQL de la app (ADR-008): se verifica al arrancar (base, rol, versión de esquema
+// y modo). Cualquier discrepancia aborta el arranque: no hay fallback a SQLite ni a memoria.
+// Las migraciones NO se aplican aquí (npm run store:migrate, rol migrador).
+const predictiveStore = businessRoutesEnabled ? await openPredictiveStore(predictiveConfig) : null;
 if (predictiveStore) {
   logger.info(
     {
-      predictiveStore: predictiveStore.health(),
+      predictiveStore: await predictiveStore.health(),
       dataSourceMode: predictiveConfig.dataSourceMode,
       researchRiskEnabled: predictiveConfig.ml.researchRiskEnabled,
     },
-    'Almacén predictivo local listo; PostgreSQL en solo lectura',
+    'Almacén predictivo PostgreSQL listo; fuente raw_flow/analytics en solo lectura',
   );
 }
 

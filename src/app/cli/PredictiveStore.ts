@@ -1,80 +1,62 @@
-import { chmodSync, mkdirSync } from 'node:fs';
-import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { DatabaseSync } from 'node:sqlite';
 import { Environment } from '../../config/environment/Environment.js';
-import { createPredictiveConfig } from '../../config/PredictiveConfig.js';
-import { SqlitePredictiveStore } from '../../modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { resolveAppDatabaseConfig } from '../../config/PredictiveConfig.js';
+import { PostgresPredictiveStore } from '../../modules/ReservationRisk/Shared/persistence/postgres/PostgresPredictiveStore.js';
+import { cliErrorMessage } from './PredictiveStoreCliConnection.js';
 
-const HELP = `Uso: npm run store:status | npm run store:backup
+const HELP = `Uso: npm run store:status
 
-  status   Estado del almacén predictivo LOCAL (SQLite) del modo activo: versión, integridad y
-           conteos agregados. No muestra datos ni rutas de clientes.
-  backup   Copia consistente (VACUUM INTO) en .local/predictive-store/backups/ con permisos 0600.
+  Estado del almacén predictivo PostgreSQL de la app (ml.app_*): driver, versión de esquema,
+  modo ligado, rol restringido y conteos agregados por tabla. Solo lectura; no muestra datos,
+  credenciales ni host. Los respaldos se realizan con pg_dump (procedimiento manual del
+  operador, ver docs/sprint-02/postgresql-only-migration.md); no hay restore automático.`;
 
-Solo actúa sobre el archivo local; PostgreSQL (fuente de solo lectura) nunca se toca.`;
+const COUNTED_TABLES = [
+  'ml.app_booking_feature_snapshots',
+  'ml.app_prediction_runs',
+  'ml.app_prediction_model_results',
+  'ml.app_overbooking_authorizations',
+  'ml.app_attendance_outcomes',
+  'ml.app_attendance_prediction_comparisons',
+  'ml.app_space_recovery_outcomes',
+] as const;
 
-function counts(file: string): Record<string, number> {
-  const db = new DatabaseSync(file, { readOnly: true });
-  try {
-    const count = (table: string) =>
-      Number(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n);
-    return {
-      snapshots: count('booking_feature_snapshots'),
-      runs: count('prediction_runs'),
-      results: count('prediction_model_results'),
-      experimentalResults: Number(
-        db
-          .prepare(
-            'SELECT count(*) AS n FROM prediction_model_results WHERE experimental_level IS NOT NULL',
-          )
-          .get()?.n,
-      ),
-    };
-  } finally {
-    db.close();
-  }
-}
-
-function main(): void {
-  const { positionals, values } = parseArgs({
-    allowPositionals: true,
-    options: { help: { type: 'boolean', default: false } },
-  });
-  const command = positionals[0];
-  if (values.help || (command !== 'status' && command !== 'backup')) {
+async function main(): Promise<void> {
+  const { values } = parseArgs({ options: { help: { type: 'boolean', default: false } } });
+  if (values.help) {
     console.log(HELP);
     return;
   }
 
-  const config = createPredictiveConfig(Environment);
-  const file = config.store.sqlitePath;
-  const store = SqlitePredictiveStore.open({ path: file, mode: config.dataSourceMode });
+  const database = resolveAppDatabaseConfig(Environment);
+  const store = await PostgresPredictiveStore.open(database, {
+    mode: Environment.DATA_SOURCE_MODE,
+    allowPrivilegedRole: Environment.APP_DB_ALLOW_PRIVILEGED_ROLE,
+  });
   try {
-    const health = store.health();
-    if (command === 'status') {
-      console.log(JSON.stringify({ ...health, ...counts(file) }, null, 2));
-      return;
+    const counts: Record<string, number> = {};
+    for (const table of COUNTED_TABLES) {
+      const [row] = await store.database.query<{ total: string }>(
+        `SELECT count(*)::text AS total FROM ${table}`,
+      );
+      counts[table] = Number(row?.total ?? 0);
     }
-    const directory = path.join(path.dirname(file), 'backups');
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const target = path.join(
-      directory,
-      `${config.dataSourceMode.toLowerCase()}-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`,
+    const [legacy] = await store.database.query<{ total: string }>(
+      `SELECT count(*)::text AS total FROM ml.app_prediction_model_results WHERE legacy_store IS NOT NULL`,
     );
-    const db = new DatabaseSync(file, { readOnly: true });
-    try {
-      db.prepare('VACUUM INTO ?').run(target);
-    } finally {
-      db.close();
-    }
-    chmodSync(target, 0o600);
     console.log(
-      JSON.stringify({ backup: path.relative(process.cwd(), target), ...counts(target) }, null, 2),
+      JSON.stringify(
+        { ...(await store.health()), counts, importedLegacyResults: Number(legacy?.total ?? 0) },
+        null,
+        2,
+      ),
     );
   } finally {
-    store.close();
+    await store.close();
   }
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error('Error en store:status:', cliErrorMessage(error));
+  process.exitCode = 1;
+});
