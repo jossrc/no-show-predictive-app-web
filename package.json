@@ -21,6 +21,7 @@
     "test": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/**/*.test.ts' 'tests/contracts/**/*.test.ts' 'tests/e2e/**/*.test.ts'",
     "test:unit": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/**/*.test.ts'",
     "test:sprint2": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/sprint2/*.test.ts'",
+    "test:sprint3": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test --test-concurrency=1 'tests/unit/modules/ReservationImport/**/*.test.ts' 'tests/unit/modules/CustomerRetention/**/*.test.ts' 'tests/integration/modules/ReservationImport/**/*.test.ts' 'tests/integration/modules/CustomerRetention/**/*.test.ts'",
     "test:contract": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/contracts/**/*.test.ts'",
     "test:e2e": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/e2e/**/*.test.ts'",
     "test:integration": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test --test-concurrency=1 'tests/integration/**/*.test.ts'",
@@ -45,10 +46,13 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
+    "@fastify/multipart": "10.1.9",
     "@fastify/swagger": "9.9.2",
     "@scalar/fastify-api-reference": "1.73.1",
     "ajv": "8.20.0",
+    "csv-parse": "7.0.3",
     "fastify": "5.12.1",
+    "fflate": "0.8.3",
     "mysql2": "3.24.3",
     "pg": "8.23.1",
     "pg-hstore": "2.3.4",

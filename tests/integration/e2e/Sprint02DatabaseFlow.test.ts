@@ -226,7 +226,7 @@ describe(
       ).json();
       assert.deepEqual(
         [health.driver, health.schemaVersion, health.restrictedRole],
-        ['postgresql', '002', true],
+        ['postgresql', '003', true],
       );
     });
 

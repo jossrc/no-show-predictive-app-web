@@ -14,7 +14,10 @@ import type {
 } from './PredictiveModulesDependencies.js';
 import { registerModules } from './RegisterModules.js';
 
-/** Límite global de cuerpo: 413 antes de deserializar cargas grandes (no hay uploads en Sprint 01). */
+/**
+ * Límite global de cuerpo JSON: 413 antes de deserializar cargas grandes. La carga de archivos
+ * (POST /reservation-imports) usa su propio límite multipart, encapsulado en ese módulo.
+ */
 export const MAX_BODY_BYTES = 64 * 1024;
 
 export interface BuildAppOptions {

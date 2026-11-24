@@ -114,19 +114,27 @@ npm run store:status          # estado/conteos del almacén PostgreSQL de la app
 | POST   | `/reservations/:id/space-recovery-outcomes`    | HU-08: registrar espacio recuperado (true/false)                        |
 | GET    | `/reservations/:id/space-recovery-outcome`     | HU-08: resultado de recuperación                                        |
 | GET    | `/space-recovery-outcomes`                     | HU-08: listado paginado (insumo HU-13)                                  |
+| POST   | `/reservation-imports`                         | incorporar reservas desde CSV/XLSX (multipart, campo `file`)            |
+| GET    | `/retention/priority-clients`                  | clientes con cita en 72 h y banda experimental HIGH vigente (paginado)  |
+| GET    | `/retention/priority-clients/export`           | mismo listado completo en CSV (UTF-8 con BOM, anti-fórmulas)            |
+| POST   | `/reservations/:id/retention-contacts`         | registrar una acción de retención realizada (no envía mensajes)         |
 
 `GET /reservations` y `GET /reservations/:id` incluyen además (aditivo) `overbooking`,
 `attendanceOutcome` y `spaceRecoveryOutcome`. Contratos: Sprint 01
 [`docs/sprint-01/api_contract.md`](docs/sprint-01/api_contract.md); Sprint 02
 [`docs/sprint-02/api-contract.md`](docs/sprint-02/api-contract.md) y handoff frontend
-[`docs/sprint-02/frontend-handoff.md`](docs/sprint-02/frontend-handoff.md).
+[`docs/sprint-02/frontend-handoff.md`](docs/sprint-02/frontend-handoff.md). Importación de reservas y
+retención: [`docs/reservation-import-and-retention/README.md`](docs/reservation-import-and-retention/README.md)
+y [`frontend-integration.md`](docs/reservation-import-and-retention/frontend-integration.md). Ambos
+listados exponen además (aditivo) `origin` (`SOURCE`/`IMPORT`) e `importBatchId`.
 
 ## Configuración relevante
 
 `ML_RESEARCH_RISK_ENABLED` (defecto `true`: el POST exige política v2 disponible; sin ella ⇒ `503
 RESEARCH_RISK_POLICY_NOT_READY`, nunca un score sin banda ni `LOW`), `ML_RESEARCH_EXPECTED_POLICY_HASHES`
 (allowlist opcional), `APP_DB_*_POSTGRES` (almacén de la app, obligatorio con rutas de negocio),
-`APP_DB_STATEMENT_TIMEOUT_MS`, `APP_DB_ALLOW_PRIVILEGED_ROLE` (solo desarrollo local). Ver `.env.example`.
+`APP_DB_STATEMENT_TIMEOUT_MS`, `APP_DB_ALLOW_PRIVILEGED_ROLE` (solo desarrollo local),
+`RESERVATION_IMPORT_MAX_FILE_BYTES` / `RESERVATION_IMPORT_MAX_ROWS` (límites de importación). Ver `.env.example`.
 
 ## Documentación interactiva — Scalar API Reference
 
@@ -143,6 +151,7 @@ npm run check                 # typecheck + format:check + unit/contract/e2e + b
 npm run test:coverage         # umbrales 85 % líneas / 80 % ramas
 # Integración real con Python (opt-in, la clave se pasa por variable, nunca en el comando literal):
 ML_RUN_REAL_INTEGRATION=1 ML_REAL_SERVICE_URL=http://127.0.0.1:8001 ML_REAL_SERVICE_KEY="$ML_KEY" npm run test:integration
+npm run test:sprint3          # importación de reservas + retención (unit/HTTP + integración PostgreSQL aislada)
 npm run test:db:up            # PostgreSQL de PRUEBA aislado (:55432, tmpfs): requerido por las suites
                               # que persisten (cada suite crea y elimina su propia base desechable)
 ```
@@ -155,4 +164,5 @@ sobre `docker-compose.yml` (volumen con datos reales).
 `docs/sprint-01/` (scope, architecture, source_inventory, feature_lineage, api_contract, ml_integration,
 database, testing, performance, acceptance_matrix, implementation_report), `docs/sprint-02/`
 (backend-implementation, api-contract, frontend-handoff, postgresql-only-migration,
-acceptance-and-tests, openapi.json), decisiones `docs/adr/ADR-001…008` y cierre técnico [`docs/backend-node-final-closeout-20261011.md`](docs/backend-node-final-closeout-20261011.md).
+acceptance-and-tests, openapi.json), `docs/reservation-import-and-retention/` (README, frontend-integration,
+plantillas sintéticas CSV/XLSX, openapi.json), decisiones `docs/adr/ADR-001…008` y cierre técnico [`docs/backend-node-final-closeout-20261011.md`](docs/backend-node-final-closeout-20261011.md).

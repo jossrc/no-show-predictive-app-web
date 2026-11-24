@@ -1,4 +1,4 @@
-import type { Reservation } from '../models/Reservation.js';
+import type { Reservation, ReservationOrigin } from '../models/Reservation.js';
 import type {
   ExperimentalRiskSummary,
   ReservationScoreSummary,
@@ -15,6 +15,9 @@ export interface ReservationBody {
   hasRescheduleEvent: boolean;
   classificationCutoffAt: string | null;
   sourceFreshness: 'CURRENT' | 'STALE_CLASSIFICATION';
+  /** Procedencia (aditivo): SOURCE = sistema de agendamiento; IMPORT = archivo incorporado. */
+  origin: ReservationOrigin;
+  importBatchId: string | null;
 }
 
 export interface ScoreSummaryBody {
@@ -47,6 +50,8 @@ export function toReservationBody(
     hasRescheduleEvent: reservation.hasRescheduleEvent,
     classificationCutoffAt: reservation.classificationCutoffAt?.toISOString() ?? null,
     sourceFreshness,
+    origin: reservation.origin ?? 'SOURCE',
+    importBatchId: reservation.importBatchId ?? null,
   };
 }
 

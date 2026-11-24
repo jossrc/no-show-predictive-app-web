@@ -67,6 +67,19 @@ function isAfterCursor(
   return compareRanked(row, pivot, descending) > 0;
 }
 
+/** Aplica la restricción opcional por identificador al ranking global (antes de paginar). */
+function restrictRanked(
+  ranked: readonly RankedScore[],
+  criteria: ReservationListCriteria,
+): readonly RankedScore[] {
+  const only = criteria.onlyReservationIds ? new Set(criteria.onlyReservationIds) : null;
+  const excluded = new Set(criteria.excludeReservationIds ?? []);
+  if (only === null && excluded.size === 0) return ranked;
+  return ranked.filter(
+    (row) => (only === null || only.has(row.reservationId)) && !excluded.has(row.reservationId),
+  );
+}
+
 function filtersOf(criteria: ReservationListCriteria): ReservationSourceFilters {
   return {
     startInclusive: criteria.startInclusive,
@@ -93,6 +106,9 @@ export class ScoredReservationRepository implements ReservationRepository {
 
   async list(criteria: ReservationListCriteria): Promise<ReservationListPage> {
     const storeAvailable = await this.scores.isAvailable();
+    if (criteria.onlyReservationIds?.length === 0) {
+      return { rows: [], hasMore: false, predictiveStoreAvailable: storeAvailable };
+    }
     const usesScoreFilter =
       criteria.probabilityRange !== null || criteria.experimentalRiskLevel !== null;
 
@@ -147,7 +163,7 @@ export class ScoredReservationRepository implements ReservationRepository {
         `El ranking por score admite hasta ${MAX_RANKING_CANDIDATES} reservas puntuadas por modelo`,
       );
     }
-    return ranked;
+    return restrictRanked(ranked, criteria);
   }
 
   private async listChronological(
@@ -165,8 +181,8 @@ export class ScoredReservationRepository implements ReservationRepository {
     const page = await this.source.list({
       ...filtersOf(criteria),
       direction: criteria.sortDirection,
-      onlyIds,
-      excludeIds: null,
+      onlyIds: onlyIds ?? criteria.onlyReservationIds ?? null,
+      excludeIds: usesScoreFilter ? null : (criteria.excludeReservationIds ?? null),
       after: criteria.after
         ? {
             appointmentAt: criteria.after.appointmentAt,
@@ -237,11 +253,15 @@ export class ScoredReservationRepository implements ReservationRepository {
 
     // Fase 3: cola NULLS LAST (sin score del modelo / sin banda en la política), cronológica.
     if (!hasMore && !usesScoreFilter) {
+      const excluded = [
+        ...scored.map((row) => row.reservation.reservationId),
+        ...(criteria.excludeReservationIds ?? []),
+      ];
       const tail = await this.source.list({
         ...filtersOf(criteria),
         direction: 'asc',
-        onlyIds: null,
-        excludeIds: scored.length > 0 ? scored.map((row) => row.reservation.reservationId) : null,
+        onlyIds: criteria.onlyReservationIds ?? null,
+        excludeIds: excluded.length > 0 ? excluded : null,
         after:
           inTail && after
             ? { appointmentAt: after.appointmentAt, reservationId: after.reservationId }

@@ -10,6 +10,7 @@ docs/*
 !docs/sprint-01/
 !docs/sprint-02/
 !docs/adr/
+!docs/reservation-import-and-retention/
 !docs/backend-node-final-closeout-*.md
 *.BACKUP.*
 *.BASE.*
@@ -802,3 +803,11 @@ reports/
 # Se conservan como material histórico (ADR-008); el runtime ya no los usa.
 .local/
 data-local/
+
+# Exportaciones de agenda (CSV/Excel) e insumos de importación: contienen datos reales, nunca a Git.
+# Solo se versionan las plantillas SINTÉTICAS del contrato de importación.
+*.csv
+*.xlsx
+*.xls
+!docs/reservation-import-and-retention/templates/reservation_import_v1_template.csv
+!docs/reservation-import-and-retention/templates/reservation_import_v1_template.xlsx

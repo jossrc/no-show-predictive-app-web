@@ -70,6 +70,15 @@ function reservation(
 
 export const SYNTHETIC_DEMO_CLINICS: readonly number[] = [1, 2, 3];
 export const SYNTHETIC_DEMO_CLASSIFICATION_CUTOFF = CLASSIFICATION_CUTOFF;
+/** Última modificación sintética de los clientes (anterior a toda reserva del dataset). */
+export const SYNTHETIC_DEMO_CLIENT_STAMP = '2026-01-01T00:00:00.000Z';
+/** Único producto del catálogo sintético (tipo 1, área corporal 101, sin evaluación médica). */
+export const SYNTHETIC_DEMO_PRODUCT = {
+  productId: '900101',
+  productType: 1,
+  bodyAreaProductId: '101',
+  isMedicalEvaluation: false,
+} as const;
 
 export const SYNTHETIC_DEMO_RESERVATIONS: readonly SyntheticReservationFixture[] = [
   reservation({

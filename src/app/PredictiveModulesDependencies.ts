@@ -2,7 +2,11 @@ import type { CachedMlModelCatalog } from '../infrastructure/http/ml/CachedMlMod
 import type { CachedResearchPolicyCatalog } from '../infrastructure/http/ml/CachedResearchPolicyCatalog.js';
 import type { MlPredictionClient } from '../infrastructure/http/ml/MlPredictionClient.js';
 import type { ClientHistoryRepository } from '../modules/ClientHistory/Shared/persistence/ClientHistoryRepository.js';
+import type { RetentionContactRepository } from '../modules/CustomerRetention/Shared/persistence/RetentionContactRepository.js';
 import type { OperationalRepositories } from '../modules/OperationalOptimization/Shared/persistence/OperationalRepositories.js';
+import type { ImportFileLimits } from '../modules/ReservationImport/Shared/parsing/ImportTable.js';
+import type { ImportReferenceReader } from '../modules/ReservationImport/Shared/persistence/ImportReferenceReader.js';
+import type { ImportedReservationRepository } from '../modules/ReservationImport/Shared/persistence/ImportedReservationRepository.js';
 import type { BookingEvidenceSource } from '../modules/ReservationRisk/Shared/persistence/BookingEvidenceSource.js';
 import type { BookingSnapshotRepository } from '../modules/ReservationRisk/Shared/persistence/BookingSnapshotRepository.js';
 import type { PredictionResultRepository } from '../modules/ReservationRisk/Shared/persistence/PredictionResultRepository.js';
@@ -14,7 +18,7 @@ import type { ReservationScoreReader } from '../modules/Reservations/Shared/pers
 import type { DataSourceMode } from '../shared/data/DataSourceMode.js';
 import type { Clock } from '../shared/time/Clock.js';
 
-/** Dependencias inyectables de los módulos de negocio de Sprint 01 y 02 (reales o de prueba). */
+/** Dependencias inyectables de los módulos de negocio (reales o de prueba). */
 export interface PredictiveModulesDependencies {
   readonly reservations: ReservationRepository;
   readonly history: ClientHistoryRepository;
@@ -35,6 +39,16 @@ export interface PredictiveModulesDependencies {
   readonly policy: RiskLevelPolicy;
   readonly mode: DataSourceMode;
   readonly clock: Clock;
+  /** Incorporación masiva de reservas (ml.app_imported_reservations); ausente = sin rutas. */
+  readonly reservationImport?: ReservationImportDependencies;
+  /** Registro de acciones de retención (ml.app_retention_contacts); ausente = sin rutas. */
+  readonly retentionContacts?: RetentionContactRepository;
+}
+
+export interface ReservationImportDependencies {
+  readonly imported: ImportedReservationRepository;
+  readonly references: ImportReferenceReader;
+  readonly limits: ImportFileLimits;
 }
 
 export interface PredictiveApiRegistration {

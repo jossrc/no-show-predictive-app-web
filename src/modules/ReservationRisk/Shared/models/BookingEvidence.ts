@@ -83,4 +83,12 @@ export interface BookingEvidence {
   readonly sourceIngestionBatchId: string | null;
   /** Procedencia: réplica real (VERIFIED_BOOKING_SNAPSHOT si se acredita) o fixture sintética. */
   readonly evidenceSource: SnapshotEvidenceSource;
+  /**
+   * Instante hasta el que el historial as-of de la fuente está completo. Solo lo declaran las
+   * fuentes cuya reserva puede ser posterior al último corte del historial (p. ej., reservas
+   * incorporadas por archivo); ausente = la reserva pertenece a la misma réplica que el historial.
+   */
+  readonly historyCoveredUntil?: Date | null;
+  /** Tablas que aportaron la evidencia (se conservan en el snapshot); ausente = réplica FLOWww. */
+  readonly evidenceTables?: readonly string[];
 }

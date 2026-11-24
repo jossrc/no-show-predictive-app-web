@@ -1,3 +1,5 @@
+import { RESERVATION_ORIGINS } from '../models/Reservation.js';
+
 const nullableDateTime = { type: ['string', 'null'], format: 'date-time' } as const;
 
 export const ReservationBodySchema = {
@@ -14,6 +16,8 @@ export const ReservationBodySchema = {
     'hasRescheduleEvent',
     'classificationCutoffAt',
     'sourceFreshness',
+    'origin',
+    'importBatchId',
   ],
   properties: {
     reservationId: { type: 'string' },
@@ -26,6 +30,17 @@ export const ReservationBodySchema = {
     hasRescheduleEvent: { type: 'boolean' },
     classificationCutoffAt: nullableDateTime,
     sourceFreshness: { type: 'string', enum: ['CURRENT', 'STALE_CLASSIFICATION'] },
+    origin: {
+      type: 'string',
+      enum: [...RESERVATION_ORIGINS],
+      description:
+        'Procedencia: SOURCE = sistema de agendamiento (fuente de solo lectura); IMPORT = archivo CSV/Excel incorporado (POST /reservation-imports).',
+    },
+    importBatchId: {
+      type: ['string', 'null'],
+      format: 'uuid',
+      description: 'Lote de importación de procedencia; null si origin = SOURCE.',
+    },
   },
 } as const;
 

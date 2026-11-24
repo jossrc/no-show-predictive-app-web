@@ -20,6 +20,8 @@ export const NOT_SCORABLE_REASON_MESSAGES = {
     'No existe instantánea de reserva utilizable en el modo de datos activo',
   CATALOG_UNRESOLVED:
     'No es posible identificar o resolver el catálogo de uno o más servicios programados',
+  HISTORY_COVERAGE_INCOMPLETE:
+    'El historial de asistencia disponible no cubre hasta la creación de la reserva',
 } as const;
 
 export type NotScorableReasonCode = keyof typeof NOT_SCORABLE_REASON_MESSAGES;
