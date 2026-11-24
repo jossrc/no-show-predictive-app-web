@@ -3,7 +3,7 @@ import type { ClinicAccessScope } from '../../../../shared/security/RequestPrinc
 import type { Reservation } from '../models/Reservation.js';
 import type { ListableReservationStatus } from '../models/ReservationStatus.js';
 
-/** Filtros de negocio del listado (siempre aplicados en la FUENTE, nunca en el almacén local). */
+/** Filtros de negocio del listado (siempre aplicados en la FUENTE, nunca en el almacén de la app). */
 export interface ReservationSourceFilters {
   readonly startInclusive: Date;
   readonly endExclusive: Date;

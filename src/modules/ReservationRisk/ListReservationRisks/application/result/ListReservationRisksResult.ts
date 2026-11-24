@@ -1,6 +1,7 @@
 import type { MlModelKey } from '../../../../../infrastructure/http/ml/MlFeatureContract.js';
 import type { DataSourceMode } from '../../../../../shared/data/DataSourceMode.js';
 import type { Reservation } from '../../../../Reservations/Shared/models/Reservation.js';
+import type { ReservationOperationalStatus } from '../../../../Reservations/Shared/models/ReservationOperationalStatus.js';
 import type {
   ExperimentalRiskSummary,
   ReservationScoreSummary,
@@ -26,6 +27,8 @@ export interface ListReservationRisksItem {
   readonly experimentalRisk: ExperimentalRiskSummary | null;
   /** true si esa banda pertenece a la política vigente del listado (filtros/orden). */
   readonly experimentalPolicyCurrent: boolean;
+  /** Sprint 02: registros de gestión propios (sin N+1); null si el almacén no está disponible. */
+  readonly operationalStatus: ReservationOperationalStatus | null;
 }
 
 export interface ListExperimentalRiskPolicy extends ExperimentalPolicyIdentity {
@@ -59,7 +62,7 @@ export interface ListReservationRisksResult {
   readonly classificationUnavailable: boolean;
   /** Riesgo operativo aprobado no disponible (política pending_validation). */
   readonly operationalClassificationUnavailable: boolean;
-  /** No hay scores con banda experimental v2 para el modelo elegido en el almacén local. */
+  /** No hay scores con banda experimental v2 para el modelo elegido en el almacén de la app. */
   readonly experimentalClassificationUnavailable: boolean;
   /** Política research que gobierna filtro/orden experimental (la del score v2 más reciente). */
   readonly experimentalRiskPolicy: ListExperimentalRiskPolicy | null;

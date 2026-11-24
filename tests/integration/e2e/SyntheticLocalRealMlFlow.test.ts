@@ -1,27 +1,29 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { after, describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import { createMlPredictionClient } from '../../../src/app/CreatePredictiveDependencies.js';
 import { EnvironmentSchema } from '../../../src/config/environment/EnvironmentSchema.js';
 import { createPredictiveConfig } from '../../../src/config/PredictiveConfig.js';
 import { AUTH_HEADERS } from '../../helpers/BuildTestApp.js';
 import { buildSyntheticLocalApp } from '../../helpers/BuildSyntheticLocalApp.js';
+import {
+  createIsolatedStoreDatabase,
+  type IsolatedStoreDatabase,
+} from '../../helpers/PredictiveStoreTestDatabase.js';
 import { reportSkipped } from '../../helpers/ReportSkipped.js';
+import { probeTestDatabase } from '../../helpers/TestDatabase.js';
 
 /**
- * E2E REAL Node ↔ Python v2 sin PostgreSQL (opt-in): ML_RUN_REAL_INTEGRATION=1,
+ * E2E REAL Node ↔ Python v2 sin la FUENTE PostgreSQL (opt-in): ML_RUN_REAL_INTEGRATION=1,
  * ML_REAL_SERVICE_URL, ML_REAL_SERVICE_KEY. Instancia SYNTHETIC_DEMO_ONLY con dataset local
- * versionado y SQLite en un directorio temporal; Python real calcula score, banda y SHAP.
+ * versionado y almacén PostgreSQL de la app en una base de PRUEBA aislada; Python real calcula
+ * score, banda y SHAP.
  */
 const enabled =
   process.env.ML_RUN_REAL_INTEGRATION === '1' &&
   process.env.ML_REAL_SERVICE_URL &&
   process.env.ML_REAL_SERVICE_KEY;
 const skip = enabled
-  ? false
+  ? ((await probeTestDatabase()) ?? false)
   : 'SKIP: ML_RUN_REAL_INTEGRATION=1 + ML_REAL_SERVICE_URL/KEY no definidos';
 reportSkipped('SyntheticLocalRealMlFlow', skip);
 
@@ -48,15 +50,17 @@ function realMl() {
 }
 
 describe(
-  'E2E real Node ↔ Python v2 (SYNTHETIC_DEMO_ONLY + SQLite, sin PostgreSQL)',
+  'E2E real Node ↔ Python v2 (SYNTHETIC_DEMO_ONLY + almacén PostgreSQL de la app, sin fuente)',
   { skip },
   () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'nsp-real-'));
-    const sqlitePath = path.join(directory, 'synthetic.sqlite');
-    after(() => rmSync(directory, { recursive: true, force: true }));
+    let storeDatabase: IsolatedStoreDatabase;
+    before(async () => {
+      storeDatabase = await createIsolatedStoreDatabase('SYNTHETIC_DEMO_ONLY');
+    });
+    after(async () => storeDatabase?.drop());
 
     it('POST compare real ⇒ bandas publicadas por Python para cada caso; GET/listado/filtros/SHAP coherentes', async () => {
-      const ctx = buildSyntheticLocalApp({ ml: realMl(), sqlitePath });
+      const ctx = await buildSyntheticLocalApp({ ml: realMl(), storeDatabase });
       const get = (url: string) => ctx.app.inject({ method: 'GET', url, headers: AUTH_HEADERS });
       try {
         assert.equal(
@@ -137,7 +141,7 @@ describe(
     });
 
     it('6 POST concurrentes reales ⇒ 1 run y 2 scores; reinicio recupera todo sin volver a inferir', async () => {
-      const ctx = buildSyntheticLocalApp({ ml: realMl(), sqlitePath });
+      const ctx = await buildSyntheticLocalApp({ ml: realMl(), storeDatabase });
       const responses = await Promise.all(
         Array.from({ length: 6 }, () =>
           ctx.app.inject({
@@ -151,21 +155,21 @@ describe(
       assert.deepEqual(responses.map((r) => r.statusCode).sort(), [200, 200, 200, 200, 200, 201]);
       await ctx.close();
 
-      const local = new DatabaseSync(sqlitePath, { readOnly: true });
-      const runs = local
-        .prepare(
-          "SELECT count(*) AS n FROM prediction_runs WHERE reservation_id = '900000000101009'",
-        )
-        .get()?.n;
-      const results = local
-        .prepare(
-          "SELECT count(*) AS n FROM prediction_model_results WHERE reservation_id = '900000000101009'",
-        )
-        .get()?.n;
-      local.close();
+      const local = await storeDatabase.connect('admin');
+      const count = async (table: string) =>
+        Number(
+          (
+            await local.query<{ n: string }>(
+              `SELECT count(*)::text AS n FROM ${table} WHERE reservation_id = 900000000101009`,
+            )
+          ).rows[0]?.n,
+        );
+      const runs = await count('ml.app_prediction_runs');
+      const results = await count('ml.app_prediction_model_results');
+      await local.end();
       assert.deepEqual([runs, results], [1, 2]);
 
-      const restarted = buildSyntheticLocalApp({ ml: realMl(), sqlitePath });
+      const restarted = await buildSyntheticLocalApp({ ml: realMl(), storeDatabase });
       const risk = (
         await restarted.app.inject({
           method: 'GET',

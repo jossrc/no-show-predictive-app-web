@@ -204,6 +204,7 @@ describe('Arquitectura: fronteras de módulos y capas (src/**)', () => {
       ClientHistory: ['Reservations'],
       ReservationRisk: ['Reservations', 'ClientHistory'],
       PredictionModels: ['ReservationRisk'],
+      OperationalOptimization: ['Reservations', 'ReservationRisk'],
     };
     const found = violations((file) => {
       const owner = moduleOf(file.relative);
@@ -232,11 +233,17 @@ describe('Arquitectura: fronteras de módulos y capas (src/**)', () => {
   });
 
   it('prohibido sync({alter|force}) y DROP/ALTER/TRUNCATE sobre raw_flow o analytics (src y migraciones app)', () => {
-    const migrationDir = path.join(ROOT, 'migrations/postgres/app');
-    const migrationFiles = readdirSync(migrationDir).map((file) => ({
-      relative: `migrations/postgres/app/${file}`,
-      code: readFileSync(path.join(migrationDir, file), 'utf8').replace(/--.*$/gm, ''),
-    }));
+    const migrationFiles = [
+      'migrations/postgres/app',
+      'migrations/postgres/predictive_app',
+    ].flatMap((relativeDir) =>
+      readdirSync(path.join(ROOT, relativeDir))
+        .filter((file) => file.endsWith('.sql'))
+        .map((file) => ({
+          relative: `${relativeDir}/${file}`,
+          code: readFileSync(path.join(ROOT, relativeDir, file), 'utf8').replace(/--.*$/gm, ''),
+        })),
+    );
     const destructive =
       /\b(DROP|ALTER|TRUNCATE)\s+(TABLE|SCHEMA|VIEW)\s+(IF\s+EXISTS\s+)?(raw_flow|analytics)\b/i;
     // Excepción justificada: la migración FLOWww preexistente (npm run migrate:flow) ES el
@@ -260,6 +267,39 @@ describe('Arquitectura: fronteras de módulos y capas (src/**)', () => {
       return bad;
     });
     assert.deepEqual(found, []);
+  });
+
+  it('ADR-008: SQLite fuera del runtime; solo la utilidad de importación puntual lee node:sqlite', () => {
+    const allowed = new Set(['src/app/cli/ImportLegacySqliteStore.ts']);
+    const found = sources
+      .filter((file) => !allowed.has(file.relative))
+      .filter(
+        (file) =>
+          file.imports.some((spec) => spec === 'node:sqlite' || /sqlite/i.test(spec)) ||
+          /PREDICTIVE_STORE_SQLITE_PATH|DatabaseSync/.test(file.code),
+      )
+      .map((file) => file.relative);
+    assert.deepEqual(found, []);
+  });
+
+  it('ADR-008: migraciones del almacén predictivo solo aditivas (sin down ni vocabulario destructivo)', async () => {
+    const { additiveMigrationViolations } =
+      await import('../../../src/infrastructure/database/postgres/AdditiveMigrationGuard.js');
+    const directory = path.join(ROOT, 'migrations/postgres/predictive_app');
+    const files = readdirSync(directory).filter((file) => file.endsWith('.sql'));
+    assert.ok(files.length >= 2);
+    assert.deepEqual(
+      files.filter((file) => !/^\d{3}_[a-z0-9_]+\.sql$/.test(file)),
+      [],
+      'sin archivos .down.sql',
+    );
+    for (const file of files) {
+      assert.deepEqual(
+        additiveMigrationViolations(readFileSync(path.join(directory, file), 'utf8')),
+        [],
+        file,
+      );
+    }
   });
 
   it('RiskFeaturesBuilder y el historial as-of no usan client_history_current ni el target', () => {

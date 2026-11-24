@@ -20,7 +20,7 @@ import type { BookingEvidenceSource } from '../../Shared/persistence/BookingEvid
 import type { RiskLevelPolicy } from '../../Shared/policy/RiskLevelPolicy.js';
 import { preAssessScorability } from '../../Shared/validation/PreAssessScorability.js';
 import type { ListReservationRisksInput } from './input/ListReservationRisksInput.js';
-import { resolveListPeriod } from './ResolveListPeriod.js';
+import { resolveListPeriod } from '../../../Reservations/Shared/validation/ResolveListPeriod.js';
 import type {
   ListExperimentalRiskPolicy,
   ListReservationRisksItem,
@@ -31,7 +31,7 @@ export interface ListReservationRisksDependencies {
   readonly reservations: ReservationRepository;
   readonly policy: RiskLevelPolicy;
   readonly evidenceSource: Pick<BookingEvidenceSource, 'snapshotEvidenceSource'>;
-  /** Política research vigente según el almacén local (sin llamar a Python). */
+  /** Política research vigente según el almacén de la app (sin llamar a Python). */
   readonly scores: Pick<ReservationScoreReader, 'currentExperimentalPolicy'>;
   readonly mode: DataSourceMode;
   readonly clock: Clock;
@@ -190,6 +190,7 @@ export class ListReservationRisks {
       experimentalRisk,
       experimentalPolicyCurrent:
         experimentalRisk !== null && experimentalRisk.policyHash === experimentalPolicy?.policyHash,
+      operationalStatus: row.operationalStatus,
     };
   }
 }

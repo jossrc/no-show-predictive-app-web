@@ -14,6 +14,7 @@ import { FakeBookingEvidenceSource } from './FakeBookingEvidenceSource.js';
 import { FakePredictionClient } from './FakePredictionClient.js';
 import { FixedClock } from './FixedClock.js';
 import { InMemoryClientHistoryRepository } from './InMemoryClientHistoryRepository.js';
+import { InMemoryOperationalStore } from './InMemoryOperationalStore.js';
 import { InMemoryPredictiveStore } from './InMemoryPredictiveStore.js';
 import { InMemoryReservationRepository } from './InMemoryReservationRepository.js';
 
@@ -26,6 +27,7 @@ export const healthyCheck = { check: async () => undefined } as unknown as Seque
 export interface TestAppContext {
   readonly app: FastifyInstance;
   readonly store: InMemoryPredictiveStore;
+  readonly operations: InMemoryOperationalStore;
   readonly reservations: InMemoryReservationRepository;
   readonly history: InMemoryClientHistoryRepository;
   readonly evidence: FakeBookingEvidenceSource;
@@ -51,7 +53,8 @@ export interface BuildTestAppOptions {
 /** App Fastify completa (rutas, schemas, error handler, compuerta) con dobles en memoria. */
 export function buildTestApp(options: BuildTestAppOptions = {}): TestAppContext {
   const store = new InMemoryPredictiveStore();
-  const reservations = new InMemoryReservationRepository(store);
+  const operations = new InMemoryOperationalStore();
+  const reservations = new InMemoryReservationRepository(store, operations);
   const history = new InMemoryClientHistoryRepository();
   const evidence = options.evidence ?? new FakeBookingEvidenceSource();
   const ml = new FakePredictionClient();
@@ -68,6 +71,8 @@ export function buildTestApp(options: BuildTestAppOptions = {}): TestAppContext 
     snapshots: store,
     results: store,
     scores: store,
+    runs: store,
+    operations,
     evidenceSource: evidence,
     ml,
     modelCatalog: new CachedMlModelCatalog(ml, 60_000),
@@ -93,5 +98,5 @@ export function buildTestApp(options: BuildTestAppOptions = {}): TestAppContext 
         : { internalApiKeySha256: sha256Hex(TEST_INTERNAL_API_KEY), dependencies: deps },
   });
 
-  return { app, store, reservations, history, evidence, ml, clock, logLines };
+  return { app, store, operations, reservations, history, evidence, ml, clock, logLines };
 }

@@ -9,12 +9,16 @@ export interface PersistenceUnavailableExceptionProps {
     | 'TIMEOUT'
     | 'EXPERIMENTAL_RISK_NOT_SUPPORTED'
     | 'STORE_MODE_MISMATCH'
+    | 'STORE_NOT_BOUND'
+    | 'SCHEMA_VERSION_MISMATCH'
+    | 'DATABASE_MISMATCH'
+    | 'PRIVILEGED_ROLE_REJECTED'
     | 'INTEGRITY_VIOLATION';
   metadata?: ExceptionMetadata | undefined;
   cause?: unknown;
 }
 
-/** Fallo del almacén predictivo propio (SQLite local o schema ml). Nunca expone SQL ni stack. */
+/** Fallo del almacén predictivo propio (PostgreSQL ml.app_*). Nunca expone SQL ni stack. */
 export class PersistenceUnavailableException extends InfrastructureException {
   static readonly CODE = 'PERSISTENCE_UNAVAILABLE';
 

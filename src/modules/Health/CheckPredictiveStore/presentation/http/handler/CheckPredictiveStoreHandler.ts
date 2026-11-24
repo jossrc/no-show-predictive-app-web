@@ -9,7 +9,7 @@ export class CheckPredictiveStoreHandler {
     _request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<CheckPredictiveStoreResponse> => {
-    const result = this.checkPredictiveStore.execute();
+    const result = await this.checkPredictiveStore.execute();
     if (result.status === 'error') reply.status(503);
     return result;
   };

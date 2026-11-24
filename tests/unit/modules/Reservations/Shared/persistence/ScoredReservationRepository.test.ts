@@ -8,6 +8,7 @@ import {
   ScoredReservationRepository,
 } from '../../../../../../src/modules/Reservations/Shared/persistence/ScoredReservationRepository.js';
 import { InvalidReservationQueryException } from '../../../../../../src/modules/Reservations/Shared/errors/InvalidReservationQueryException.js';
+import { InMemoryOperationalStore } from '../../../../../helpers/InMemoryOperationalStore.js';
 import { InMemoryReservationSource } from '../../../../../helpers/InMemoryReservationRepository.js';
 import { makeReservation } from '../../../../../helpers/MakeSyntheticReservation.js';
 
@@ -119,7 +120,13 @@ function setup(seeds: readonly Seed[] = SEEDS) {
     );
   }
   const reader = scoreReader(seeds);
-  return { source, reader, repository: new ScoredReservationRepository(source, reader) };
+  const operations = new InMemoryOperationalStore();
+  return {
+    source,
+    reader,
+    operations,
+    repository: new ScoredReservationRepository(source, reader, operations),
+  };
 }
 
 function criteria(overrides: Partial<ReservationListCriteria> = {}): ReservationListCriteria {
@@ -297,7 +304,7 @@ describe('ScoredReservationRepository (fuente PG solo lectura + scores del almac
     };
     await assert.rejects(
       () =>
-        new ScoredReservationRepository(source, huge).list(
+        new ScoredReservationRepository(source, huge, new InMemoryOperationalStore()).list(
           criteria({ sortField: 'probabilityNoShow' }),
         ),
       (error: unknown) =>

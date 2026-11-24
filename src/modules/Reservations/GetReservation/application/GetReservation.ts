@@ -37,6 +37,7 @@ export class GetReservation {
       scores: found.scores,
       hasUsableSnapshot: found.hasUsableSnapshot,
       sourceStatus: this.mode,
+      operationalStatus: found.operationalStatus,
     };
   }
 }

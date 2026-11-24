@@ -1,6 +1,10 @@
 import type { FastifySchema } from 'fastify';
 import { ErrorResponseSchema } from '../../../../../../app/http/errors/ErrorResponseSchema.js';
 import {
+  OPERATIONAL_STATUS_REQUIRED,
+  OperationalStatusProperties,
+} from '../../../../Shared/http/OperationalStatusHttp.js';
+import {
   ReservationBodySchema,
   ScoreSummarySchema,
 } from '../../../../Shared/http/ReservationHttpSchemas.js';
@@ -10,7 +14,7 @@ export const GetReservationSchema = {
   tags: ['Reservations'],
   summary: 'Consultar una reserva',
   description:
-    'Devuelve el detalle factual de una reserva accesible, sus scores persistidos y hasUsableSnapshot. No ejecuta inferencias. Las probabilidades son exploratorias; riskLevel (operativo) permanece null mientras riskPolicyStatus=pending_validation; cada score incluye experimentalRisk (banda exploratoria research v2) o null si se obtuvo sin política research. Una reserva real sin evidencia histórica temporalmente verificable continúa NOT_SCORABLE.',
+    'Devuelve el detalle factual de una reserva accesible, sus scores persistidos y hasUsableSnapshot. No ejecuta inferencias. Sprint 02 (aditivo): overbooking (HU-06), attendanceOutcome (HU-07) y spaceRecoveryOutcome (HU-08) resumen los registros de gestión propios; no modifican reservationStatus ni FLOWww. Las probabilidades son exploratorias; riskLevel (operativo) permanece null mientras riskPolicyStatus=pending_validation; cada score incluye experimentalRisk (banda exploratoria research v2) o null si se obtuvo sin política research. Una reserva real sin evidencia histórica temporalmente verificable continúa NOT_SCORABLE.',
   security: [{ InternalApiKey: [] }],
   params: ReservationIdParamsSchema,
   response: {
@@ -27,12 +31,14 @@ export const GetReservationSchema = {
             'hasUsableSnapshot',
             'scores',
             'sourceStatus',
+            ...OPERATIONAL_STATUS_REQUIRED,
           ],
           properties: {
             ...ReservationBodySchema.properties,
             hasUsableSnapshot: { type: 'boolean' },
             scores: { type: 'array', items: ScoreSummarySchema },
             sourceStatus: { type: 'string' },
+            ...OperationalStatusProperties,
           },
         },
         requestId: { type: 'string' },

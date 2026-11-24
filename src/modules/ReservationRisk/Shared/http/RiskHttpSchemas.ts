@@ -1,4 +1,8 @@
 import {
+  OPERATIONAL_STATUS_REQUIRED,
+  OperationalStatusProperties,
+} from '../../../Reservations/Shared/http/OperationalStatusHttp.js';
+import {
   ExperimentalRiskSummarySchema,
   ReservationBodySchema,
   ScoreSummarySchema,
@@ -269,9 +273,10 @@ export const RiskAssessmentBodySchema = {
 
 export const ListItemSchema = {
   ...ReservationBodySchema,
-  required: [...ReservationBodySchema.required, 'risk'],
+  required: [...ReservationBodySchema.required, 'risk', ...OPERATIONAL_STATUS_REQUIRED],
   properties: {
     ...ReservationBodySchema.properties,
+    ...OperationalStatusProperties,
     risk: {
       type: 'object',
       additionalProperties: false,

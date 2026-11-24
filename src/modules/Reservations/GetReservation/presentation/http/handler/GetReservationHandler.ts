@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { requirePrincipal } from '../../../../../../app/http/security/RequirePrincipal.js';
 import type { GetReservation } from '../../../application/GetReservation.js';
+import { toOperationalStatusBody } from '../../../../Shared/http/OperationalStatusHttp.js';
 import {
   toReservationBody,
   toScoreSummaryBody,
@@ -25,6 +26,7 @@ export class GetReservationHandler {
         hasUsableSnapshot: result.hasUsableSnapshot,
         scores: result.scores.map((score) => toScoreSummaryBody(score)),
         sourceStatus: result.sourceStatus,
+        ...toOperationalStatusBody(result.operationalStatus),
       },
       requestId: request.id,
     };

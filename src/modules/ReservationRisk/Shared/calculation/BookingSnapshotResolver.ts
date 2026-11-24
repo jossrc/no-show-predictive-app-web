@@ -9,10 +9,7 @@ import { notScorableReason, type NotScorableReason } from '../models/NotScorable
 import type { VerifiedBookingSnapshot } from '../models/VerifiedBookingSnapshot.js';
 import type { BookingEvidenceSource } from '../persistence/BookingEvidenceSource.js';
 import type { BookingSnapshotRepository } from '../persistence/BookingSnapshotRepository.js';
-import {
-  assessBookingEvidence,
-  scoringSchedule,
-} from '../validation/AssessBookingEvidence.js';
+import { assessBookingEvidence, scoringSchedule } from '../validation/AssessBookingEvidence.js';
 import { verifySnapshotIntegrity } from './VerifySnapshotIntegrity.js';
 
 export type BookingSnapshotResolution =

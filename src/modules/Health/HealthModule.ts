@@ -22,7 +22,7 @@ export interface HealthModuleOptions {
   mysqlHealthCheck: SequelizeHealthCheck | null;
   /** Opcional: si se omite, /v1/health/ml no se registra. */
   mlHealth?: { client: Pick<MlPredictionClient, 'ready'>; configured: boolean } | undefined;
-  /** Almacén predictivo local; null/undefined ⇒ status=disabled. */
+  /** Almacén predictivo PostgreSQL de la app; null/undefined ⇒ status=disabled. */
   predictiveStore?: PredictiveStoreHealthProbe | null | undefined;
 }
 

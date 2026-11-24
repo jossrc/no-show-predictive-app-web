@@ -3,8 +3,8 @@ import type { ReservationSourceCriteria } from '../ReservationSource.js';
 /**
  * SQL parametrizado de reservas sobre la FUENTE (raw_flow/analytics, solo lectura). Esquemas,
  * tablas, columnas y ORDER BY son literales fijos (whitelist): ningún valor del usuario se
- * interpola en el texto SQL. No referencia el schema ml: los scores viven en el almacén local
- * (ADR-006). Columnas verificadas en information_schema (docs/sprint-01/source_inventory.md).
+ * interpola en el texto SQL. No referencia el schema ml: los scores se leen por la conexión
+ * propia de la app (ADR-008), nunca con joins a la fuente. Columnas verificadas en information_schema (docs/sprint-01/source_inventory.md).
  */
 export interface BuiltQuery {
   readonly sql: string;

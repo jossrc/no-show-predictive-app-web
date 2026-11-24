@@ -11,7 +11,11 @@ import { createPredictiveConfig } from '../../../src/config/PredictiveConfig.js'
 import { sha256Hex } from '../../../src/shared/security/VerifyInternalApiKey.js';
 import { IDS, seedReservationScenario } from '../../fixtures/database/ReservationScenario.js';
 import { captureSyntheticSnapshots } from '../../fixtures/database/SyntheticDemoSeed.js';
-import { SqlitePredictiveStore } from '../../../src/modules/ReservationRisk/Shared/persistence/sqlite/SqlitePredictiveStore.js';
+import { PostgresPredictiveStore } from '../../../src/modules/ReservationRisk/Shared/persistence/postgres/PostgresPredictiveStore.js';
+import {
+  createIsolatedStoreDatabase,
+  type IsolatedStoreDatabase,
+} from '../../helpers/PredictiveStoreTestDatabase.js';
 import { pgTestDbDependencies } from '../../helpers/PgTestDbDependencies.js';
 import { AUTH_HEADERS, healthyCheck, TEST_INTERNAL_API_KEY } from '../../helpers/BuildTestApp.js';
 import {
@@ -35,9 +39,15 @@ reportSkipped('Sprint01RealMlFlow', skip);
 describe('E2E Sprint 01 con Python real', { skip: skip ?? false }, () => {
   let client: pg.Client;
   let sequelize: Sequelize;
-  const store = SqlitePredictiveStore.open({ path: ':memory:', mode: 'SYNTHETIC_DEMO_ONLY' });
+  let storeDatabase: IsolatedStoreDatabase;
+  let store: PostgresPredictiveStore;
 
   before(async () => {
+    storeDatabase = await createIsolatedStoreDatabase('SYNTHETIC_DEMO_ONLY');
+    store = await PostgresPredictiveStore.open(storeDatabase.runtime, {
+      mode: 'SYNTHETIC_DEMO_ONLY',
+      allowPrivilegedRole: false,
+    });
     await resetTestDatabase();
     client = await connectPg();
     await seedReservationScenario(client);
@@ -47,6 +57,8 @@ describe('E2E Sprint 01 con Python real', { skip: skip ?? false }, () => {
   after(async () => {
     await sequelize?.close();
     await client?.end();
+    await store?.close();
+    await storeDatabase?.drop();
   });
 
   it('POST compare persiste scores reales con identidad; SHAP sobre el mismo snapshot; listado ordenado', async () => {

@@ -5,7 +5,7 @@ import type { ExperimentalRisk } from './ExperimentalRisk.js';
 
 export type ScoringApiVersion = 'v1' | 'v2';
 
-/** Resultado persistido de UN algoritmo sobre UN snapshot (almacén local prediction_model_results). */
+/** Resultado persistido de UN algoritmo sobre UN snapshot (ml.app_prediction_model_results). */
 export interface ModelScore {
   readonly resultId: DecimalId;
   readonly predictionRunId: string;

@@ -2,6 +2,10 @@ import type { SnapshotEvidenceSource } from '../../../../shared/data/DataSourceM
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 import { InvalidReservationQueryException } from '../errors/InvalidReservationQueryException.js';
 import type { Reservation } from '../models/Reservation.js';
+import {
+  NO_OPERATIONAL_RECORDS,
+  type ReservationOperationalStatus,
+} from '../models/ReservationOperationalStatus.js';
 import type { ReservationWithScores } from '../models/ReservationScoreSummary.js';
 import type { ReservationCursorPosition } from '../pagination/ReservationCursor.js';
 import type {
@@ -10,6 +14,7 @@ import type {
   ReservationListRow,
   ReservationRepository,
 } from './ReservationRepository.js';
+import type { ReservationOperationalStatusReader } from './ReservationOperationalStatusReader.js';
 import type { RankedScore, ReservationScoreReader } from './ReservationScoreReader.js';
 import type { ReservationSource, ReservationSourceFilters } from './ReservationSource.js';
 
@@ -74,14 +79,16 @@ function filtersOf(criteria: ReservationListCriteria): ReservationSourceFilters 
 
 /**
  * ReservationRepository runtime: reservas y filtros de negocio desde la FUENTE (PostgreSQL solo
- * lectura o fixtures sintéticas) y scores desde el almacén predictivo LOCAL. No hay joins entre
- * ambos: el orden por score se resuelve en dos fases (ranking local global → verificación de
- * filtros en la fuente → cola cronológica NULLS LAST), sin N+1 y sin ordenar solo la página.
+ * lectura o fixtures sintéticas); scores y registros de gestión (Sprint 02) desde el almacén
+ * PostgreSQL PROPIO de la app (otra conexión). No hay joins entre ambos: el orden por score se
+ * resuelve en dos fases (ranking global en el almacén → verificación de filtros en la fuente →
+ * cola cronológica NULLS LAST), sin N+1 y sin ordenar solo la página.
  */
 export class ScoredReservationRepository implements ReservationRepository {
   constructor(
     private readonly source: ReservationSource,
     private readonly scores: ReservationScoreReader,
+    private readonly operations: ReservationOperationalStatusReader,
   ) {}
 
   async list(criteria: ReservationListCriteria): Promise<ReservationListPage> {
@@ -267,15 +274,20 @@ export class ScoredReservationRepository implements ReservationRepository {
   ): Promise<ReservationListRow[]> {
     const ids = reservations.map((reservation) => reservation.reservationId);
     const read = storeAvailable && ids.length > 0;
-    const [latest, withSnapshot] = await Promise.all([
+    const [latest, withSnapshot, operational] = await Promise.all([
       read ? this.scores.latestScores(ids, evidence) : new Map<DecimalId, never[]>(),
       read ? this.scores.reservationsWithUsableSnapshot(ids, evidence) : new Set<DecimalId>(),
+      read ? this.operations.statusesFor(ids) : new Map<DecimalId, ReservationOperationalStatus>(),
     ]);
 
     return reservations.map((reservation) => ({
       reservation,
       scores: latest.get(reservation.reservationId) ?? [],
       hasUsableSnapshot: withSnapshot.has(reservation.reservationId),
+      // Almacén no disponible ⇒ null (desconocido), nunca «sin registros».
+      operationalStatus: storeAvailable
+        ? (operational.get(reservation.reservationId) ?? NO_OPERATIONAL_RECORDS)
+        : null,
       sortProbability: null,
     }));
   }

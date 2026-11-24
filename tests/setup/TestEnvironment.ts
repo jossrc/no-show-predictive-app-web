@@ -35,6 +35,16 @@ Object.assign(process.env, {
   DATABASE_CONNECTION_TIMEOUT_MS: '2000',
   DATABASE_IDLE_TIMEOUT_MS: '1000',
   DATABASE_LOGGING: 'false',
+  // Almacén PostgreSQL de la app (ADR-008): SIEMPRE el clúster de prueba y el rol runtime de
+  // prueba (sin privilegios de superusuario). Las suites que persisten crean su propia base
+  // aislada con tests/helpers/PredictiveStoreTestDatabase.ts.
+  APP_DB_HOST_POSTGRES: testDatabase.host,
+  APP_DB_PORT_POSTGRES: testDatabase.port,
+  APP_DB_NAME_POSTGRES: testDatabase.name,
+  APP_DB_USER_POSTGRES: 'noshow_app_runtime',
+  APP_DB_PASS_POSTGRES: 'test_only_runtime_pw',
+  APP_DB_STATEMENT_TIMEOUT_MS: '5000',
+  APP_DB_ALLOW_PRIVILEGED_ROLE: 'false',
   PREDICTIVE_API_ENABLED: 'true',
   INTERNAL_API_KEY_SHA256: '',
   DATA_SOURCE_MODE: 'READ_ONLY_EXISTING_SCHEDULE',

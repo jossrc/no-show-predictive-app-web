@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { requirePrincipal } from '../../../../../../app/http/security/RequirePrincipal.js';
+import { toOperationalStatusBody } from '../../../../../Reservations/Shared/http/OperationalStatusHttp.js';
 import {
   toReservationBody,
   toScoreSummaryBody,
@@ -50,6 +51,7 @@ export class ListReservationRisksHandler {
             toScoreSummaryBody(score, score.policyRiskLevel),
           ),
         },
+        ...toOperationalStatusBody(item.operationalStatus),
       })),
       pagination: { limit: result.limit, nextCursor: result.nextCursor },
       period: {

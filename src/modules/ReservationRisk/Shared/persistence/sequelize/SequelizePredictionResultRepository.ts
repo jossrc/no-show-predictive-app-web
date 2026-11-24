@@ -112,9 +112,8 @@ function mapRow(row: ResultRow): ModelScore {
 }
 
 /**
- * Adaptador PostgreSQL del schema `ml` (migración 001). PRESERVADO Y AISLADO: el runtime actual
- * usa el almacén SQLite local porque PostgreSQL es fuente de solo lectura (ADR-006); este
- * adaptador solo se conectaría con autorización expresa de escritura y una conexión separada.
+ * Adaptador HEREDADO del schema `ml` (migración 001, solo v1). PRESERVADO Y AISLADO: el runtime
+ * usa PostgresPredictionResultRepository sobre ml.app_* (ADR-008), que sí admite research v2.
  * Su esquema no admite la banda experimental v2: guardar un score v2 falla cerrado en lugar
  * de perder la clasificación.
  */
