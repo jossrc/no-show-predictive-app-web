@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "test": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/**/*.test.ts' 'tests/contracts/**/*.test.ts' 'tests/e2e/**/*.test.ts'",
     "test:unit": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/**/*.test.ts'",
+    "test:sprint2": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/unit/sprint2/*.test.ts'",
     "test:contract": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/contracts/**/*.test.ts'",
     "test:e2e": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test 'tests/e2e/**/*.test.ts'",
     "test:integration": "node --import tsx --import ./tests/setup/TestEnvironment.ts --test --test-concurrency=1 'tests/integration/**/*.test.ts'",

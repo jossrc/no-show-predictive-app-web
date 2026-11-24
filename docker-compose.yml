@@ -9,8 +9,8 @@ services:
       POSTGRES_PASSWORD: admin
     ports:
       - "5432:5432"
-    volumes:      
-      - ./docker/postgres/data:/var/lib/postgresql
+    volumes:
+      - ./docker/postgres/data-operativa:/var/lib/postgresql
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d 'depi-noshow-db'"]
