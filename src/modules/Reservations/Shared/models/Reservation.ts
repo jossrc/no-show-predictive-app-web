@@ -1,6 +1,13 @@
 import type { DecimalId } from '../../../../shared/identifiers/DecimalId.js';
 import type { ReservationStatus } from './ReservationStatus.js';
 
+/**
+ * Procedencia de la reserva: SOURCE = sistema de agendamiento (réplica raw_flow/analytics o
+ * dataset sintético del modo activo); IMPORT = archivo incorporado en ml.app_imported_reservations.
+ */
+export const RESERVATION_ORIGINS = ['SOURCE', 'IMPORT'] as const;
+export type ReservationOrigin = (typeof RESERVATION_ORIGINS)[number];
+
 /** Hechos factuales de la reserva según la réplica actual (no instantánea de reserva). */
 export interface Reservation {
   readonly reservationId: DecimalId;
@@ -16,4 +23,8 @@ export interface Reservation {
   readonly hasRescheduleEvent: boolean;
   /** Momento en que el ETL clasificó la cita (la clasificación FUTURE es relativa a ese corte). */
   readonly classificationCutoffAt: Date | null;
+  /** Ausente = SOURCE (fuentes previas a la importación de archivos). */
+  readonly origin?: ReservationOrigin;
+  /** Lote de importación de procedencia (solo origin = IMPORT). */
+  readonly importBatchId?: string | null;
 }

@@ -90,6 +90,17 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
     codes.add('CLIENT_ATTRIBUTES_NOT_POINT_IN_TIME');
   }
 
+  // Un historial cuyo último corte es anterior a la creación de la reserva omitiría eventos
+  // previos a la predicción: no se completa con ceros ni se supone ausencia de antecedentes.
+  if (
+    evidence.historyCoveredUntil !== undefined &&
+    predictionAt !== null &&
+    (evidence.historyCoveredUntil === null ||
+      evidence.historyCoveredUntil.getTime() < predictionAt.getTime())
+  ) {
+    codes.add('HISTORY_COVERAGE_INCOMPLETE');
+  }
+
   const catalogUnresolved = schedule.services.some(
     (line) => !line.productFound || !line.catalogResolved,
   );
@@ -122,6 +133,7 @@ export function assessBookingEvidence(evidence: BookingEvidence): BookingEvidenc
       })),
       evidenceSource: evidence.evidenceSource,
       servicesTemporalEvidence: evidence.servicesTemporalEvidence,
+      ...(evidence.evidenceTables ? { evidenceTables: evidence.evidenceTables } : {}),
     },
   };
 }

@@ -33,4 +33,6 @@ export interface VerifiedBookingSnapshot {
   readonly evidenceSource: SnapshotEvidenceSource;
   /** Procedencia temporal derivada o capturada; se conserva en evidence_json al persistir. */
   readonly servicesTemporalEvidence?: ServicesTemporalEvidence;
+  /** Tablas de procedencia de la evidencia; ausente = réplica FLOWww (raw_flow/analytics). */
+  readonly evidenceTables?: readonly string[];
 }

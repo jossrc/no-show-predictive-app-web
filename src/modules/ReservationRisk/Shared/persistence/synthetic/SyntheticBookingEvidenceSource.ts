@@ -1,4 +1,5 @@
 import {
+  SYNTHETIC_DEMO_CLIENT_STAMP,
   SYNTHETIC_DEMO_RESERVATIONS,
   type SyntheticReservationFixture,
 } from '../../../../../shared/data/synthetic/SyntheticDemoDataset.js';
@@ -6,7 +7,7 @@ import type { DecimalId } from '../../../../../shared/identifiers/DecimalId.js';
 import type { BookingEvidence } from '../../models/BookingEvidence.js';
 import type { BookingEvidenceSource } from '../BookingEvidenceSource.js';
 
-const SYNTHETIC_CLIENT_STAMP = new Date('2026-01-01T00:00:00.000Z');
+const SYNTHETIC_CLIENT_STAMP = new Date(SYNTHETIC_DEMO_CLIENT_STAMP);
 
 function toEvidence(fixture: SyntheticReservationFixture): BookingEvidence {
   return {

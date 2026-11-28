@@ -10,10 +10,10 @@ export function registerOpenApi(app: FastifyInstance): void {
       openapi: '3.1.0',
       info: {
         title: 'DEPI — No-Show Predictive API',
-        version: '1.2.0-sprint02-operational-optimization',
+        version: '1.3.0-reservation-import-retention',
         summary: 'Backend Fastify — Sprints 01 y 02 · Sistema predictivo de inasistencias',
         description:
-          'API principal del sistema web predictivo de inasistencias: reservas (PostgreSQL de solo lectura), probabilidades experimentales de Random Forest y XGBoost (Python v1/v2), explicaciones SHAP e historial as-of. Dos clasificaciones distintas: (1) riskLevel OPERATIVO, siempre null mientras no exista una política aprobada (riskPolicyStatus=pending_validation; filtrar/ordenar por él ⇒ 409 RISK_POLICY_UNAVAILABLE); (2) experimentalRisk, banda relativa EXPERIMENTAL Bajo/Medio/Alto (exploratorio) publicada por la política research_risk_v1_1 de Python v2 para cada modelo por separado (RESEARCH_PROVISIONAL, approvedBy=null). Las bandas son terciles relativos del score crudo: no son probabilidad de inasistencia ni riesgo clínico, y operationalUseAllowed=false en todo momento. Sprint 02 (Optimización operativa): HU-06 marca horarios HIGH como «Habilitado para sobreasignación», HU-07 registra la asistencia real y la contrasta por modelo, HU-08 registra si el espacio gestionado se recuperó; ninguna acción crea/modifica citas en FLOWww. Persistencia 100 % PostgreSQL (ADR-008): las tablas fuente raw_flow/analytics se leen por una conexión de SOLO LECTURA y snapshots, scores y registros de gestión se insertan en tablas propias ml.app_* por una conexión separada con privilegios mínimos (SELECT/INSERT). Todos los ejemplos son sintéticos.',
+          'API principal del sistema web predictivo de inasistencias: reservas (PostgreSQL de solo lectura), probabilidades experimentales de Random Forest y XGBoost (Python v1/v2), explicaciones SHAP e historial as-of. Dos clasificaciones distintas: (1) riskLevel OPERATIVO, siempre null mientras no exista una política aprobada (riskPolicyStatus=pending_validation; filtrar/ordenar por él ⇒ 409 RISK_POLICY_UNAVAILABLE); (2) experimentalRisk, banda relativa EXPERIMENTAL Bajo/Medio/Alto (exploratorio) publicada por la política research_risk_v1_1 de Python v2 para cada modelo por separado (RESEARCH_PROVISIONAL, approvedBy=null). Las bandas son terciles relativos del score crudo: no son probabilidad de inasistencia ni riesgo clínico, y operationalUseAllowed=false en todo momento. Sprint 02 (Optimización operativa): HU-06 marca horarios HIGH como «Habilitado para sobreasignación», HU-07 registra la asistencia real y la contrasta por modelo, HU-08 registra si el espacio gestionado se recuperó; ninguna acción crea/modifica citas en FLOWww. Persistencia 100 % PostgreSQL (ADR-008): las tablas fuente raw_flow/analytics se leen por una conexión de SOLO LECTURA y snapshots, scores y registros de gestión se insertan en tablas propias ml.app_* por una conexión separada con privilegios mínimos (SELECT/INSERT). Incorporación masiva de reservas (CSV/Excel) en tablas propias, integradas al listado, detalle y predicción existentes; y gestión de retención de clientes con reservas próximas de banda experimental HIGH (listado, exportación CSV y registro de acciones, sin envío de comunicaciones). Todos los ejemplos son sintéticos.',
       },
       servers: [{ url: 'http://127.0.0.1:3000', description: 'Servidor de desarrollo' }],
       tags: [
@@ -36,6 +36,16 @@ export function registerOpenApi(app: FastifyInstance): void {
           name: 'Prediction Models',
           description:
             'Catálogo de Random Forest y XGBoost independientes y política experimental de bandas (research v2).',
+        },
+        {
+          name: 'Reservation import',
+          description:
+            'Incorporación masiva de reservas desde CSV/Excel (contrato reservation_import_v1) en tablas propias ml.app_*; nunca escribe en raw_flow/analytics ni genera predicciones.',
+        },
+        {
+          name: 'Customer retention',
+          description:
+            'Clientes con reservas próximas (72 h) y banda experimental HIGH vigente, exportación CSV y registro de acciones de retención (no envía comunicaciones).',
         },
         {
           name: 'Operational optimization',

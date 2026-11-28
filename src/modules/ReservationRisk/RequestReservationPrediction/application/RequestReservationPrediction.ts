@@ -243,15 +243,17 @@ export class RequestReservationPrediction {
       features: built.value.features,
       evidenceSource: verified.evidenceSource,
       evidence: {
-        sources: [
-          'analytics.appointment_outcomes',
-          'raw_flow.diary_gen',
-          'raw_flow.diary_det',
-          'raw_flow.clients',
-          'analytics.appointment_services',
-          'analytics.product_catalog_resolution',
-          'analytics.ml_history_cumulative_v1',
-        ],
+        sources: verified.evidenceTables
+          ? [...verified.evidenceTables]
+          : [
+              'analytics.appointment_outcomes',
+              'raw_flow.diary_gen',
+              'raw_flow.diary_det',
+              'raw_flow.clients',
+              'analytics.appointment_services',
+              'analytics.product_catalog_resolution',
+              'analytics.ml_history_cumulative_v1',
+            ],
         historyCutoffExclusive: history.cutoffAt.toISOString(),
         historyLatestKnownAt: history.latestKnownAt?.toISOString() ?? null,
         serviceLines: verified.scheduledServices.length,

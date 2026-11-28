@@ -45,6 +45,12 @@ export interface ReservationListCriteria {
   /** Filtro por banda EXPERIMENTAL del modelo elegido (exige `experimentalPolicyHash`). */
   readonly experimentalRiskLevel: ExperimentalRiskLevel | null;
   readonly snapshotEvidence: SnapshotEvidenceSource;
+  /**
+   * Restricción opcional por identificador calculada por otro registro propio (p. ej., estado de
+   * gestión): solo estas reservas / todas salvo estas. Se aplica antes de paginar.
+   */
+  readonly onlyReservationIds?: readonly DecimalId[] | null;
+  readonly excludeReservationIds?: readonly DecimalId[] | null;
   readonly after: ReservationCursorPosition | null;
   readonly limit: number;
 }

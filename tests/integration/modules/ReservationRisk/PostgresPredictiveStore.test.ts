@@ -138,7 +138,7 @@ describe(
       const health = await store.health();
       assert.deepEqual(
         [health.status, health.driver, health.schemaVersion, health.durable, health.restrictedRole],
-        ['ok', 'postgresql', '002', true, true],
+        ['ok', 'postgresql', '003', true, true],
       );
     });
 

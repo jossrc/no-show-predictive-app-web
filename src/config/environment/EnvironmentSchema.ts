@@ -230,6 +230,16 @@ const predictiveStoreSchema = {
   APP_DB_ALLOW_PRIVILEGED_ROLE: envBoolean(false),
 };
 
+/** Incorporación masiva de reservas (CSV/XLSX): límites por archivo/lote configurables. */
+const reservationImportSchema = {
+  RESERVATION_IMPORT_MAX_FILE_BYTES: positiveInt(
+    'RESERVATION_IMPORT_MAX_FILE_BYTES',
+    5 * 1024 * 1024,
+    20 * 1024 * 1024,
+  ),
+  RESERVATION_IMPORT_MAX_ROWS: positiveInt('RESERVATION_IMPORT_MAX_ROWS', 5000, 20000),
+};
+
 export const EnvironmentSchema = z.object({
   ...postgresSchema,
   ...mysqlSchema,
@@ -238,6 +248,7 @@ export const EnvironmentSchema = z.object({
   ...predictiveApiSchema,
   ...mlServiceSchema,
   ...predictiveStoreSchema,
+  ...reservationImportSchema,
 });
 
 export type EnvironmentVariables = z.infer<typeof EnvironmentSchema>;

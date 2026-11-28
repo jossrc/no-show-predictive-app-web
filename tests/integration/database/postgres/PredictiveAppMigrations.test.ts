@@ -25,7 +25,7 @@ describe(
   'Runner de migraciones del almacén (solo up, aditivo) sobre BD de PRUEBA',
   { skip: skip ?? false },
   () => {
-    it('aplica 001–002 con el rol migrador, es idempotente y deja tablas ml.app_* con checksum', async () => {
+    it('aplica 001–003 con el rol migrador, es idempotente y deja tablas ml.app_* con checksum', async () => {
       const database = await createIsolatedStoreDatabase('READ_ONLY_EXISTING_SCHEDULE', {
         migrate: false,
       });
@@ -33,7 +33,7 @@ describe(
       try {
         const migrations = await loadPredictiveAppMigrations(PREDICTIVE_APP_MIGRATIONS_DIR);
         const runner = new PredictiveAppMigrationRunner(migrator, migrations);
-        assert.deepEqual(await runner.up(), ['001', '002']);
+        assert.deepEqual(await runner.up(), ['001', '002', '003']);
         assert.deepEqual(await runner.up(), [], 'segunda ejecución sin cambios');
         assert.equal(await runner.bindIdentity('READ_ONLY_EXISTING_SCHEDULE'), 'BOUND');
         assert.equal(await runner.bindIdentity('READ_ONLY_EXISTING_SCHEDULE'), 'ALREADY_BOUND');
@@ -50,11 +50,15 @@ describe(
           'app_attendance_outcomes',
           'app_attendance_prediction_comparisons',
           'app_booking_feature_snapshots',
+          'app_imported_reservations',
           'app_overbooking_authorizations',
           'app_prediction_model_results',
           'app_prediction_runs',
           'app_predictive_store_identity',
           'app_predictive_store_migrations',
+          'app_reservation_import_batches',
+          'app_reservation_import_rejections',
+          'app_retention_contacts',
           'app_space_recovery_outcomes',
         ]);
         const history = await migrator.query<{
@@ -66,7 +70,7 @@ describe(
         );
         assert.deepEqual(
           history.rows.map((row) => row.version),
-          ['001', PREDICTIVE_APP_SCHEMA_VERSION],
+          ['001', '002', PREDICTIVE_APP_SCHEMA_VERSION],
         );
         assert.deepEqual(
           history.rows.map((row) => row.checksum),

@@ -39,12 +39,18 @@ export interface PredictiveStoreConfig {
   readonly allowPrivilegedRole: boolean;
 }
 
+export interface ReservationImportConfig {
+  readonly maxFileBytes: number;
+  readonly maxRows: number;
+}
+
 export interface PredictiveConfig {
   readonly api: PredictiveApiConfig;
   readonly dataSourceMode: DataSourceMode;
   readonly ml: MlServiceConfig;
   readonly store: PredictiveStoreConfig;
   readonly sourceStatementTimeoutMs: number;
+  readonly reservationImport: ReservationImportConfig;
 }
 
 function resolveApiConfig(env: EnvironmentVariables): PredictiveApiConfig {
@@ -166,5 +172,9 @@ export function createPredictiveConfig(env: EnvironmentVariables): PredictiveCon
     },
     store: resolveStoreConfig(env, api),
     sourceStatementTimeoutMs: 10_000,
+    reservationImport: {
+      maxFileBytes: env.RESERVATION_IMPORT_MAX_FILE_BYTES,
+      maxRows: env.RESERVATION_IMPORT_MAX_ROWS,
+    },
   };
 }

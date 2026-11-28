@@ -1,4 +1,4 @@
--- Sprint 02 · Almacén predictivo PostgreSQL (migración 001, SOLO up)
+-- TESIS 2026-2027 · Sprint 02 · Almacén predictivo PostgreSQL (migración 001, SOLO up)
 -- Reemplaza el almacén SQLite local de Sprint 01 (ADR-008). Crea objetos NUEVOS con prefijo
 -- ml.app_* en el schema propio ml: no modifica raw_flow, analytics ni objetos preexistentes.
 -- Sin IF NOT EXISTS (una colisión debe fallar), sin OR REPLACE, sin DROP/ALTER/DELETE/UPDATE.

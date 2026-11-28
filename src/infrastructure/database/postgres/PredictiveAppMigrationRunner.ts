@@ -6,7 +6,7 @@ import type { DataSourceMode } from '../../../shared/data/DataSourceMode.js';
 import { additiveMigrationViolations, createdObjects } from './AdditiveMigrationGuard.js';
 
 /** Versión de esquema que el runtime exige (última migración de migrations/postgres/predictive_app). */
-export const PREDICTIVE_APP_SCHEMA_VERSION = '002';
+export const PREDICTIVE_APP_SCHEMA_VERSION = '003';
 export const PREDICTIVE_APP_MIGRATIONS_TABLE = 'ml.app_predictive_store_migrations';
 
 const MIGRATION_FILE = /^(\d{3})_([a-z0-9_]+)\.sql$/;

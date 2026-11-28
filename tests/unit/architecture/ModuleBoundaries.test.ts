@@ -205,6 +205,8 @@ describe('Arquitectura: fronteras de módulos y capas (src/**)', () => {
       ReservationRisk: ['Reservations', 'ClientHistory'],
       PredictionModels: ['ReservationRisk'],
       OperationalOptimization: ['Reservations', 'ReservationRisk'],
+      ReservationImport: ['Reservations', 'ReservationRisk'],
+      CustomerRetention: ['Reservations', 'ReservationRisk'],
     };
     const found = violations((file) => {
       const owner = moduleOf(file.relative);
