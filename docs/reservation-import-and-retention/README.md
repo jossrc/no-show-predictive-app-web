@@ -208,6 +208,10 @@ PREDICTIVE_STORE_MIGRATION_AUTHORIZED=true npm run store:migrate
 Si la base usa roles restringidos, los privilegios por defecto del rol migrador conceden
 `SELECT/INSERT` al runtime sobre las tablas nuevas.
 
+**Estado:** aplicada en `depi-noshow-db` el 28/11/2026 (03:26Z), tras reconciliar el checksum de la
+001 restaurando su archivo original; detalle y evidencia en
+[incidente-checksum-001.md](incidente-checksum-001.md).
+
 ## 10. Pruebas
 
 ```bash
